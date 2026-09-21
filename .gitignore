@@ -1,0 +1,14 @@
+# virtualenv
+.venv/
+
+# site photos (input) and generated results
+stockpile_picture/
+output/
+
+# FastSAM weights: 138 MB, above GitHub's 100 MB hard limit.
+# rock_gradation.py downloads these automatically on first run.
+*.pt
+
+# python
+__pycache__/
+*.py[cod]
