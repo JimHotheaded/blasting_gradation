@@ -12,8 +12,7 @@ pip install -r requirements.txt
 ```
 
 The first run downloads the model weights (FastSAM-x.pt, about 140 MB) into
-the folder you run it from. After that it works offline. It runs on the CPU,
-with no GPU needed, and takes about 30 s per photo.
+the folder you run it from. After that it works offline. A GPU is not required. Runtime and device selection depend on the local environment.
 
 ## Run
 
@@ -27,7 +26,7 @@ rock). Without it the whole photo is analysed.
 Several photos of the same shot, merged into one gradation:
 
 ```
-python rock_gradation.py shot12\*.jpg --roi 0,0.2,1,0.8 --combine --out shot12\result
+python rock_gradation.py shot12/photo1.jpg shot12/photo2.jpg --roi 0,0.2,1,0.8 --combine --out shot12/result
 ```
 
 ## Outputs (per photo)
@@ -65,17 +64,21 @@ python rock_gradation.py shot12\*.jpg --roi 0,0.2,1,0.8 --combine --out shot12\r
    also removes the pole and anything outside the ROI.
 3. **Size.** Each block's sieve size is the minor axis of its best-fit
    ellipse (≈ intermediate dimension).
-4. **Grade.** Cumulative % passing weighted by visible area. By Delesse's
-   principle, area fraction on the surface equals volume fraction.
+4. **Grade.** Cumulative % passing weighted by calibrated visible area.
+   This is an approximation; a photographed pile surface is not a random
+   section and does not establish bulk volume fractions.
 5. **Fines correction.** The camera cannot see fines in voids. Below 50 mm
    the Rosin-Rammler curve is used, and the measured curve above that is
-   rescaled to fill the rest. This is the same approach Split-Desktop uses.
+   rescaled to fill the rest. If fitting is unsupported or fails, the report
+   uses measured values and explicitly records a warning. This correction
+   has not been calibrated against physical sieve measurements.
 
 ## Accuracy — read before reporting
 
-* A single photo is typically **±25–30 %**. The oversize % in one photo is
-  often decided by 3–6 boulders, so shoot **5–10 photos per shot** and use
-  `--combine`.
+* **Accuracy has not been validated.** The earlier ±25–30% estimate is not
+  supported by validation data in this repository. Several representative
+  photos improve sampling but do not establish accuracy. Compare outputs
+  against physical measurements before using them for production decisions.
 * Keep the pole in the middle distance, flat on the rock, square to the
   camera. Take the photo as square-on to the pile face as you can.
 * Blocks much nearer or further than the pole are mis-scaled. Use `--roi`
@@ -84,3 +87,43 @@ python rock_gradation.py shot12\*.jpg --roi 0,0.2,1,0.8 --combine --out shot12\r
   inside.
 * **Always look at the overlay.** If one block is split into two, or two
   blocks are merged into one, the number is off.
+
+
+## Correctness and export behavior (schema version 2)
+
+- `--fines none` uses the measured distribution throughout. Failed RR fits
+  have `status: unavailable`, null fit values, and an explicit measured fallback.
+- Passing means size **strictly less than** a sieve opening. Breaker material
+  includes sizes equal to the threshold. Bands are lower-inclusive and
+  upper-exclusive; operational thresholds split bands automatically.
+- D-values are weighted empirical thresholds, not linear interpolation between
+  fragments. Corrected fines use the analytic RR inverse; the coarse tail uses
+  the empirical threshold. D-values can differ from older exports.
+- `--min-size` applies to the selected physical size metric after perspective
+  correction. A separate 15-pixel floor excludes unresolved masks.
+- Existing outputs are refused unless `--overwrite` is explicit. Duplicate
+  output stems, including `combined`, are rejected before inference.
+- Writes are staged per report and checked before publishing. Filesystem errors
+  stop the run; earlier completed photos in a batch may remain. Publishing a
+  report involves multiple renames, not one atomic transaction.
+- JSON uses `null` for unavailable values and records requested/effective fines
+  modes, warnings, settings, package versions, source calibration, and accuracy
+  status. Consumers must support `schema_version: 2`.
+- Fragment CSV IDs are unique within the export; `source_image` and
+  `source_label` identify the original image and segmentation label. Pixel
+  coordinates refer to that image's downscaled working resolution.
+- Unicode paths are supported directly. `.claude/gradation_run.py` is now a
+  compatibility entry point; no rename workaround is needed or attempted.
+- Existing files in `example/` and old `output/` folders are historical outputs,
+  not regenerated validation results for this version.
+
+## Regression tests
+
+From the repository root in PowerShell:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m unittest discover -s tests -v
+```
+
+These tests use synthetic fragments/masks, failure injection, and temporary
+exports. They do not download a model or measure real-world accuracy.

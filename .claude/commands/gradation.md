@@ -41,24 +41,17 @@ If the stem is not a date, ask the user for the production date rather than inve
 
 ## 4. Run it
 
-Two steps, both from the shell. `.claude/gradation_run.py` wraps `rock_gradation.py` to work
-around two machine quirks (scripts cannot create `*.jpg`; OpenCV cannot open the non-ASCII
-repo path) without modifying `rock_gradation.py` itself — read its docstring for detail.
+Run the maintained CLI directly. The compatibility wrapper delegates to it without
+source patching. Unicode paths are supported. Do not rename extensions or bypass
+write failures; a failed output write stops the run.
 
-```bash
-# analyse — repeat per photo, each with its own ROI
-./.venv/Scripts/python.exe .claude/gradation_run.py <photo> --roi <roi> --out output/<YYYY-MM-DD>
-
-# rename the overlay .jpeg -> .jpg (must be a -c run straight from the shell, not from a script)
-./.venv/Scripts/python.exe -c "
-import shutil, os, glob
-for j in glob.glob('output/<YYYY-MM-DD>/*_overlay.jpeg'):
-    shutil.copyfile(j, j[:-5]+'.jpg'); os.remove(j); print('overlay ->', j[:-5]+'.jpg')
-"
+```powershell
+.\.venv\Scripts\python.exe -B rock_gradation.py <photo> --roi <roi> --out output/<YYYY-MM-DD>
 ```
 
-Expect ~30 s per photo on CPU. Each photo yields 5 files: `_overlay.jpg`, `_curve.png`,
-`_gradation.csv`, `_fragments.csv`, `_result.json`.
+Each photo yields five checked files. Existing outputs require a new directory or
+explicit `--overwrite`. Pass explicit image paths for combined runs. A batch uses
+one ROI setting for all photos; process separately if their ROIs differ.
 
 Flags worth knowing: `--breaker` (oversize limit, default 400 mm), `--bypass` (default 10 mm),
 `--segment-length` (one pole segment, default 400 mm), `--persp` when the foreground is
@@ -84,8 +77,9 @@ Take the headline numbers from `_result.json` and give the user a table:
 scale mm/px · fragments · area delineated % · D50 · D80 · top size · Cu · RR xc and n ·
 bypass % · crusher % · **breaker % and the oversize block count**.
 
-With several photos, compare them in one table. Then state the accuracy caveat plainly: a
-single photo is ±25–30%, only the pile surface is visible and it is coarser than the interior,
-and the oversize figure usually rests on a handful of boulders — 5–10 photos per shot with
-`--combine` is what makes a number defensible. If the oversize % rests on fewer than ~5
-blocks, say so explicitly.
+With several photos, compare them in one table. Check `schema_version`,
+`rosin_rammler.status`, `warnings`, and requested/effective fines correction before
+summarizing. Missing fit values are null, not zero. If the report fell back to
+measured values, say so. State that accuracy is unvalidated; the older +/-25-30%
+claim was not supported by validation data. Multiple photos improve sampling but
+do not establish accuracy. Physical measurements are needed for validation.

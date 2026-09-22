@@ -28,13 +28,12 @@ More
   --persp 0.8            foreground closer than pole: scale at bottom = 0.8x
   --roi x,y,w,h          analyse only this box (leave out bench face / sky);
                          pixels or fractions, e.g. 0,0.2,1,0.8
-  --combine *.jpg        several photos of one shot -> one gradation
+  --combine a.jpg b.jpg  explicit photos of one shot -> one gradation
 
-Accuracy: a single 2D photo is typically +/-25-30 %. Only the surface is seen
-(surface is coarser than the pile), fines hide in voids (the report switches
-to the Rosin-Rammler fit below --fit-min), and scale is only true near the
-pole's distance from the camera. Use 5-10 photos per shot for a number you
-can defend.
+Accuracy is unvalidated; the earlier +/-25-30% estimate was not verified.
+Only the surface is seen, fines hide in voids, and scale is only true near
+the pole distance. Inspect overlays and compare against physical measurements.
+Several photos improve sampling but do not establish accuracy.
 """
 
 from __future__ import annotations
@@ -44,12 +43,16 @@ import csv
 import json
 import math
 import sys
+import warnings
+import tempfile
+import hashlib
+from importlib.metadata import version, PackageNotFoundError
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import cv2
 import numpy as np
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, OptimizeWarning
 
 STD_SIZES_MM = [10, 25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 600,
                 700, 800, 900, 1000, 1200]
@@ -78,6 +81,7 @@ class Fragment:
     cx: float
     cy: float
     edge: bool          # cut by ROI / image edge
+    source_image: str = ""
 
 
 # ============================================================================
@@ -224,20 +228,39 @@ def resolve_masks(masks, shape, excl, min_px, max_frac=0.35):
 
     n = len(keep)
     contained = [[] for _ in range(n)]      # j (smaller) contained in i
+    duplicates = set()
     for i in range(n):
+        if i in duplicates:
+            continue
         for j in range(i + 1, n):
+            if j in duplicates:
+                continue
             it = _inter(keep[i], keep[j])
+            if it == keep[i]["area"] == keep[j]["area"]:
+                duplicates.add(j)
+                continue
             if it > 0.8 * keep[j]["area"]:
                 contained[i].append(j)
 
-    dropped = set()
+    dropped = set(duplicates)
     for i in range(n):
         if i in dropped:
             continue
         kids = [j for j in contained[i] if j not in dropped]
         if not kids:
             continue
-        cover = sum(keep[j]["area"] for j in kids) / keep[i]["area"]
+        parent = keep[i]
+        union = np.zeros_like(parent["m"], dtype=bool)
+        py0, py1, px0, px1 = parent["box"]
+        for j in kids:
+            child = keep[j]
+            cy0, cy1, cx0, cx1 = child["box"]
+            y0, y1 = max(py0, cy0), min(py1, cy1)
+            x0, x1 = max(px0, cx0), min(px1, cx1)
+            if y0 < y1 and x0 < x1:
+                union[y0-py0:y1-py0, x0-px0:x1-px0] |= child["m"][
+                    y0-cy0:y1-cy0, x0-cx0:x1-cx0]
+        cover = np.count_nonzero(union & parent["m"]) / parent["area"]
         if len(kids) >= 2 and cover > 0.5:
             dropped.add(i)                  # group of rocks
         else:
@@ -258,7 +281,7 @@ def resolve_masks(masks, shape, excl, min_px, max_frac=0.35):
 # 3. Measurement
 # ============================================================================
 def measure(labels, mmpp, min_px, edge_zone, metric, weight="area",
-            persp=1.0, pole_y=None):
+            persp=1.0, pole_y=None, min_size=0.0):
     """persp: mm/px at the photo's bottom edge / mm/px at the pole row
     (<1 when the foreground is closer to the camera than the pole)."""
     frags = []
@@ -290,6 +313,8 @@ def measure(labels, mmpp, min_px, edge_zone, metric, weight="area",
         major, minor = major * f, minor * f
         ecd = 2 * math.sqrt(area / math.pi)
         size = {"minor": minor, "ecd": ecd, "mean": (major + minor) / 2}[metric]
+        if size * sc < min_size:
+            continue
         # area weight: visible area fraction = volume fraction (Delesse);
         # volume weight: per-block ellipsoid, over-weights big blocks
         w = (area * sc * sc if weight == "area"
@@ -310,8 +335,11 @@ def rr_cdf(x, xc, n):
 def curve(frags):
     s = np.array([f.size_mm for f in frags])
     w = np.array([f.weight for f in frags])
-    o = np.argsort(s)
-    return s[o], np.cumsum(w[o]) / w.sum() * 100
+    if not len(s) or not np.isfinite(s).all() or not np.isfinite(w).all() or (s <= 0).any() or (w <= 0).any():
+        raise ValueError("Fragments must have finite positive sizes and weights")
+    o = np.argsort(s, kind="stable")
+    cumulative = np.cumsum(w[o] / w.max())
+    return s[o], cumulative / cumulative[-1] * 100
 
 
 def pct_at(s, cum, x):
@@ -321,24 +349,67 @@ def pct_at(s, cum, x):
 
 
 def d_at(s, cum, p):
-    return float(np.interp(p, cum, s))
+    """Weighted empirical quantile (threshold of the step, not interpolation)."""
+    return float(s[min(int(np.searchsorted(cum, p, side="left")), len(s) - 1)])
 
 
 def fit_rr(s, cum, lo):
     """Least squares on a log-spaced size grid (lo .. top size), so the
     coarse tail counts as much as the many small fragments do."""
+    failed = dict(status="unavailable", xc_mm=None, n=None, rmse_pct=None)
+    if lo >= s.max() or len(np.unique(s)) < 3:
+        return dict(failed, reason="Insufficient size variation above the fit threshold")
     x50 = d_at(s, cum, 50)
-    hi = s.max()
-    xg = np.logspace(math.log10(max(lo, s.min())), math.log10(hi), 25)
+    xg = np.logspace(math.log10(max(lo, s.min())), math.log10(s.max()), 25)
     yg = np.array([pct_at(s, cum, x) for x in xg]) / 100
     sel = (yg > 0.01) & (yg < 0.995)
+    if sel.sum() < 3 or len(np.unique(yg[sel])) < 3:
+        return dict(failed, reason="Insufficient independent cumulative levels for fitting")
     try:
-        (xc, n), _ = curve_fit(rr_cdf, xg[sel], yg[sel],
-                               p0=[x50 / 0.693 ** (1 / 1.2), 1.2],
-                               bounds=([1, 0.3], [1e5, 5]), maxfev=20000)
-    except Exception:
-        xc, n = x50 / 0.693 ** (1 / 1.2), 1.2
-    return float(xc), float(n)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", OptimizeWarning)
+            (xc, n), covariance = curve_fit(
+                rr_cdf, xg[sel], yg[sel],
+                p0=[float(np.clip(x50 / 0.693 ** (1 / 1.2), 1.01, 99999)), 1.2],
+                bounds=([1, 0.3], [1e5, 5]), maxfev=20000)
+        if not np.isfinite(covariance).all() or not np.isfinite([xc, n]).all():
+            raise ValueError("Non-finite fit parameters or covariance")
+    except (RuntimeError, ValueError, FloatingPointError, OptimizeWarning) as exc:
+        return dict(failed, reason=str(exc))
+    rmse = float(np.sqrt(np.mean((rr_cdf(xg[sel], xc, n) - yg[sel]) ** 2)) * 100)
+    return dict(status="fitted", xc_mm=float(xc), n=float(n), rmse_pct=rmse, reason=None)
+
+
+def report_distribution(s, cum, fit, fit_min, fines):
+    """One distribution and inverse shared by tables, splits, and charts."""
+    m0 = pct_at(s, cum, fit_min)
+    corrected = fines == "rr" and fit["status"] == "fitted" and m0 < 100
+    if not corrected:
+        return (lambda x: pct_at(s, cum, x)), (lambda p: d_at(s, cum, p)), "none"
+    xc, n = fit["xc_mm"], fit["n"]
+    F = float(rr_cdf(fit_min, xc, n) * 100)
+    if F >= 100:
+        return (lambda x: pct_at(s, cum, x)), (lambda p: d_at(s, cum, p)), "none"
+
+    def passing(x):
+        if x < fit_min:
+            return float(rr_cdf(max(0, x), xc, n) * 100)
+        return float(np.clip(F + (100-F) * (pct_at(s, cum, x)-m0) / (100-m0), 0, 100))
+
+    def quantile(p):
+        if p <= F:
+            return xc * (-math.log1p(-p / 100)) ** (1 / n)
+        return d_at(s, cum, m0 + (p-F) * (100-m0) / (100-F))
+
+    return passing, quantile, "rr"
+
+
+def rounded(value, digits):
+    return round(value, digits) if value is not None and math.isfinite(value) else None
+
+
+def display(value, digits=1):
+    return f"{value:.{digits}f}" if value is not None else "N/A"
 
 
 # ============================================================================
@@ -354,53 +425,68 @@ def table(rows, head):
 
 def report(frags, meta, args):
     s, cum = curve(frags)
-    xc, n = fit_rr(s, cum, args.fit_min)
-    rr = lambda x: float(rr_cdf(x, xc, n) * 100)
+    fit = fit_rr(s, cum, args.fit_min)
+    xc, n = fit["xc_mm"], fit["n"]
+    rr = lambda x: float(rr_cdf(x, xc, n) * 100) if xc is not None else None
     # Fines correction (Split-style): the camera can't see fines in voids, so
     # below fit_min take the RR curve, and rescale the measured curve above
     # it to fill the rest:  P = F + (100-F) * (m(x)-m0) / (100-m0)
     fm = args.fit_min
-    F = rr(fm) if args.fines == "rr" else pct_at(s, cum, fm)
-    m0 = pct_at(s, cum, fm)
-    def use(x):
-        if x < fm:
-            return rr(x) * (F / max(rr(fm), 1e-9))
-        return F + (100 - F) * (pct_at(s, cum, x) - m0) / max(100 - m0, 1e-9)
+    use, quantile, effective = report_distribution(s, cum, fit, fm, args.fines)
+    notices = []
+    if fit["status"] != "fitted":
+        notices.append("Rosin-Rammler fit unavailable: " + fit["reason"])
+    if args.fines == "rr" and effective == "none":
+        notices.append("Requested fines correction unavailable; report uses measured values.")
+    for notice in notices:
+        print("WARNING: " + notice, file=sys.stderr)
     bt, bp = args.breaker, args.bypass
-    R = dict(image=meta["name"], mm_per_px=round(meta["mmpp"], 4),
+    R = dict(schema_version=2, image=meta["name"], mm_per_px=rounded(meta["mmpp"], 4),
              scale_method=meta["method"], fragments=len(frags),
              weighting=args.weight, perspective=args.persp,
-             fines_correction=args.fines,
-             delineated_pct=round(meta["coverage"], 1),
-             rosin_rammler=dict(xc_mm=round(xc, 1), n=round(n, 3)))
+             fines_correction=effective, fines_requested=args.fines,
+             warnings=notices, accuracy_validated=False,
+             delineated_pct=rounded(meta["coverage"], 1),
+             rosin_rammler=fit,
+             sources=meta.get("sources", []),
+             settings={k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()
+                       if k not in {"images"}},
+             quantile_method="weighted empirical threshold; passing uses size < sieve",
+             fragment_coordinate_space="downscaled working image")
+    R["runtime"] = dict(python=sys.version.split()[0])
+    for package in ("numpy", "scipy", "opencv-python", "ultralytics", "matplotlib"):
+        try:
+            R["runtime"][package] = version(package)
+        except PackageNotFoundError:
+            R["runtime"][package] = None
 
     print("\n" + "=" * 62)
     print(f"  ROCK FRAGMENTATION  -  {meta['name']}")
     print("=" * 62)
-    if meta["mmpp"] == meta["mmpp"]:                       # not NaN
+    if R["mm_per_px"] is not None:
         print(f"  Scale        : {meta['mmpp']:.3f} mm/px  ({meta['method']})")
         print(f"  Fragments    : {len(frags)}   delineated {meta['coverage']:.0f}% of area")
     else:
         print(f"  Fragments    : {len(frags)}   (pooled, each photo scaled by its own pole)")
-    print(f"  Rosin-Rammler: xc = {xc:.0f} mm,  n = {n:.2f}")
-    print(f"  Fines corr.  : {args.fines} below {args.fit_min:.0f} mm "
-          f"(visible {pct_at(s, cum, args.fit_min):.1f}% -> {F:.1f}%)")
+    print(f"  Rosin-Rammler: {fit['status']}, xc = {display(xc, 0)} mm, n = {display(n, 2)}")
+    print(f"  Fines corr.  : {effective} (requested {args.fines}) below {fm:.0f} mm")
     print(f"  Weighting    : {args.weight}"
           + (f",  perspective {args.persp:g}" if args.persp != 1 else ""))
 
     rows, R["passing"] = [], []
     for x in STD_SIZES_MM:
         m_, f_, u_ = pct_at(s, cum, x), rr(x), use(x)
-        rows.append([x, f"{m_:.1f}", f"{f_:.1f}", f"{u_:.1f}"])
+        rows.append([x, display(m_), display(f_), display(u_)])
         R["passing"].append(dict(size_mm=x, measured=round(m_, 2),
-                                 rr_fit=round(f_, 2), report=round(u_, 2)))
+                                 rr_fit=rounded(f_, 2), report=round(u_, 2)))
     print("\n  CUMULATIVE % PASSING")
     print(table(rows, ["Size mm", "Measured", "RR fit", "Report"]))
 
     rows, R["bands"] = [], []
-    for lo, hi in zip(BANDS_MM[:-1], BANDS_MM[1:]):
+    boundaries = sorted(set(BANDS_MM[:-1]) | {bp, bt}) + [None]
+    for lo, hi in zip(boundaries[:-1], boundaries[1:]):
         ret = (use(hi) if hi else 100.0) - (use(lo) if lo else 0.0)
-        name = f"{lo}-{hi}" if hi else f">{lo}"
+        name = f"{lo:g}-{hi:g}" if hi is not None else f">={lo:g}"
         dest = ("bypass" if hi and hi <= bp else
                 "BREAKER" if lo >= bt else "crusher")
         rows.append([name, f"{ret:.1f}", dest])
@@ -414,37 +500,59 @@ def report(frags, meta, args):
     print("\n  SUMMARY SPLIT")
     print(f"    Bypass   (<{bp:.0f} mm)      : {split['bypass']:5.1f} %")
     print(f"    Crusher  ({bp:.0f}-{bt:.0f} mm)    : {split['crusher']:5.1f} %")
-    print(f"    BREAKER  (>{bt:.0f} mm)     : {split['breaker']:5.1f} %")
+    print(f"    BREAKER  (>={bt:.0f} mm)    : {split['breaker']:5.1f} %")
     n_over = sum(f.size_mm >= bt for f in frags)
+    R["oversize_blocks"] = n_over
     print(f"    Oversize blocks counted  : {n_over}")
 
     rows, R["d_values"] = [], {}
     for p in D_VALUES:
         dm = d_at(s, cum, p)
-        df = xc * (-math.log(1 - p / 100)) ** (1 / n)
-        if p < F:                             # inside the fines part
-            q = min(p / 100 * rr(fm) / max(F, 1e-9), 0.999)
-            dv = xc * (-math.log(1 - q)) ** (1 / n)
-        else:                                 # invert the rescaled curve
-            dv = d_at(s, cum, m0 + (p - F) * (100 - m0) / max(100 - F, 1e-9))
+        df = xc * (-math.log(1 - p / 100)) ** (1 / n) if xc is not None else None
+        dv = quantile(p)
         R["d_values"][f"D{p}"] = round(dv, 1)
-        rows.append([f"D{p}", f"{dm:.0f}", f"{df:.0f}", f"{dv:.0f}"])
+        rows.append([f"D{p}", display(dm, 0), display(df, 0), display(dv, 0)])
     print("\n  CHARACTERISTIC SIZES (mm)")
     print(table(rows, ["", "Measured", "RR fit", "Report"]))
     R["top_size_mm"] = round(float(s.max()), 1)
-    R["Cu"] = round(R["d_values"]["D60"] / R["d_values"]["D10"], 2)
+    R["Cu"] = round(quantile(60) / quantile(10), 2)
     print(f"    Top size (largest block) : {s.max():.0f} mm")
     print(f"    Cu = D60/D10             : {R['Cu']:.1f}")
-    print("\n  Report = measured curve with fines correction. +/-25-30 %: surface"
-          "\n  only, single photo. Use several photos per shot (--combine).")
+    print("\n  Accuracy is unvalidated; the earlier +/-25-30% estimate was not verified."
+          "\n  Surface only: inspect overlays and compare with physical measurements."
+          "\n  Several photos improve sampling but do not establish accuracy.")
     R["_curve"] = (s, cum, xc, n)
     return R
 
 
+def output_paths(stem, overlay=True):
+    suffixes = ["_gradation.csv", "_fragments.csv", "_curve.png", "_result.json"]
+    if overlay:
+        suffixes.insert(0, "_overlay.jpg")
+    return [Path(str(stem) + suffix) for suffix in suffixes]
+
+
 def save_outputs(R, frags, a, stem, args):
-    s, cum, xc, n = R.pop("_curve")
+    """Stage a complete report before publishing; JSON is published last."""
+    paths = output_paths(stem, a is not None)
+    if not getattr(args, "overwrite", False) and any(p.exists() for p in paths):
+        raise FileExistsError(f"Output exists for {stem}; choose another --out or use --overwrite")
+    parent = Path(stem).parent
+    with tempfile.TemporaryDirectory(prefix=".gradation-", dir=parent) as folder:
+        staged = Path(folder) / Path(stem).name
+        _save_outputs(R, frags, a, str(staged), args)
+        for src, dst in zip(output_paths(staged, a is not None), paths):
+            if not src.is_file() or src.stat().st_size == 0:
+                raise OSError(f"Missing or empty output: {src.name}")
+        for src, dst in zip(output_paths(staged, a is not None), paths):
+            src.replace(dst)
+    print("Saved: " + ", ".join(str(p) for p in paths))
+
+
+def _save_outputs(R, frags, a, stem, args):
+    s, cum, xc, n = R["_curve"]
     # ---- CSVs
-    with open(f"{stem}_gradation.csv", "w", newline="") as fh:
+    with open(f"{stem}_gradation.csv", "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
         w.writerow(["size_mm", "measured_%passing", "RR_fit_%passing", "report_%passing"])
         for r in R["passing"]:
@@ -463,15 +571,22 @@ def save_outputs(R, frags, a, stem, args):
             w.writerow([k, v])
         for k, v in R["split"].items():
             w.writerow([f"split_{k}_%", v])
-    with open(f"{stem}_fragments.csv", "w", newline="") as fh:
+        w.writerow(["fit_status", R["rosin_rammler"]["status"]])
+        w.writerow(["fines_requested", R["fines_requested"]])
+        w.writerow(["fines_effective", R["fines_correction"]])
+        for notice in R["warnings"]:
+            w.writerow(["warning", notice])
+    with open(f"{stem}_fragments.csv", "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
         w.writerow(["id", "size_mm", "major_mm", "minor_mm", "ecd_mm",
-                    "area_px", "x_px", "y_px", "cut_by_edge"])
-        for f in sorted(frags, key=lambda f: -f.size_mm):
-            w.writerow([f.label, round(f.size_mm), round(f.major_mm), round(f.minor_mm),
-                        round(f.ecd_mm), f.area_px, round(f.cx), round(f.cy), f.edge])
-    with open(f"{stem}_result.json", "w") as fh:
-        json.dump(R, fh, indent=2)
+                    "area_px", "x_px", "y_px", "cut_by_edge", "source_image", "source_label", "weight"])
+        for export_id, f in enumerate(sorted(frags, key=lambda f: -f.size_mm), 1):
+            w.writerow([export_id, round(f.size_mm, 3), round(f.major_mm, 3), round(f.minor_mm, 3),
+                        round(f.ecd_mm, 3), f.area_px, round(f.cx, 3), round(f.cy, 3), f.edge,
+                        f.source_image, f.label, f.weight])
+    with open(f"{stem}_result.json", "w", encoding="utf-8") as fh:
+        json.dump({k: v for k, v in R.items() if not k.startswith("_")}, fh,
+                  indent=2, ensure_ascii=False, allow_nan=False)
 
     # ---- overlay
     if a is not None:
@@ -481,9 +596,7 @@ def save_outputs(R, frags, a, stem, args):
         for f in frags:
             if f.size_mm >= args.breaker:
                 lut[f.label] = (40, 40, 230)                     # red
-            elif f.size_mm >= 200:
-                lut[f.label] = (30, 170, 240)                    # orange
-            elif f.size_mm >= args.fit_min:
+            elif f.size_mm >= args.bypass:
                 lut[f.label] = (80, 200, 80)                     # green
             else:
                 lut[f.label] = (220, 170, 60)                    # blue
@@ -508,17 +621,19 @@ def save_outputs(R, frags, a, stem, args):
             cv2.putText(vis, f"{R['mm_per_px']:.2f} mm/px", (x1, y1 - 12),
                         cv2.FONT_HERSHEY_SIMPLEX, fs * 1.2, (255, 0, 255), 2, cv2.LINE_AA)
         # legend
-        items = [((40, 40, 230), f">{args.breaker:.0f} mm breaker"),
-                 ((30, 170, 240), f"200-{args.breaker:.0f}"),
-                 ((80, 200, 80), f"{args.fit_min:.0f}-200"),
-                 ((220, 170, 60), f"<{args.fit_min:.0f}")]
+        items = [((40, 40, 230), f">={args.breaker:g} mm breaker"),
+                 ((80, 200, 80), f"{args.bypass:g}-{args.breaker:g} crusher"),
+                 ((220, 170, 60), f"<{args.bypass:g} bypass")]
         y = 30
         cv2.rectangle(vis, (10, 8), (260, 18 + 28 * len(items)), (255, 255, 255), -1)
         for c, t in items:
             cv2.rectangle(vis, (20, y - 14), (40, y + 2), c, -1)
             cv2.putText(vis, t, (50, y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 1, cv2.LINE_AA)
             y += 28
-        cv2.imwrite(f"{stem}_overlay.jpg", vis, [cv2.IMWRITE_JPEG_QUALITY, 90])
+        ok, encoded = cv2.imencode(".jpg", vis, [cv2.IMWRITE_JPEG_QUALITY, 90])
+        if not ok:
+            raise OSError("Failed to encode overlay image")
+        Path(f"{stem}_overlay.jpg").write_bytes(encoded.tobytes())
 
     # ---- curve
     import matplotlib
@@ -528,29 +643,34 @@ def save_outputs(R, frags, a, stem, args):
     fig, ax = plt.subplots(figsize=(8.5, 5.2), dpi=130)
     ax.step(np.r_[s, s.max() * 1.02], np.r_[cum, 100], where="post", color="#666",
             lw=1.3, label=f"Measured ({len(frags)} fragments)")
-    ax.plot(xs, rr_cdf(xs, xc, n) * 100, color="#c0392b", lw=2.2,
-            label=f"Rosin-Rammler  xc = {xc:.0f} mm, n = {n:.2f}")
-    rep = R["passing"]
-    ax.plot([r["size_mm"] for r in rep], [r["report"] for r in rep], "o-",
-            color="#1f5fa8", lw=1.8, ms=4, label="Report (fines-corrected)")
+    if xc is not None:
+        ax.plot(xs, rr_cdf(xs, xc, n) * 100, color="#c0392b", lw=2.2,
+                label=f"Rosin-Rammler  xc = {xc:.0f} mm, n = {n:.2f}")
+    use, _, effective = report_distribution(s, cum, R["rosin_rammler"], args.fit_min, R["fines_correction"])
+    plot_x = np.unique(np.r_[xs, s, np.nextafter(s, np.inf), args.fit_min])
+    ax.plot(plot_x, [use(x) for x in plot_x], color="#1f5fa8", lw=1.8,
+            label="Report (fines-corrected)" if effective == "rr" else "Report (measured)")
     ax.axvline(args.breaker, color="#2c3e50", ls="--", lw=1.2)
     over = R["split"]["breaker"]
     ax.text(args.breaker * 1.04, 8, f"breaker {args.breaker:.0f} mm\n{over:.0f}% oversize",
             color="#2c3e50", fontsize=9)
-    ax.axvspan(1, args.fit_min, color="#999", alpha=0.12)
-    ax.text(args.fit_min * 0.95, 55, "fines:\nRR-corrected\n(not visible)", ha="right",
-            fontsize=8, color="#666")
+    if effective == "rr":
+        ax.axvspan(1, args.fit_min, color="#999", alpha=0.12)
+        ax.text(args.fit_min * 0.95, 55, "fines:\nRR-corrected\n(not visible)", ha="right",
+                fontsize=8, color="#666")
     ax.set_xscale("log")
     ax.set_xlim(5, xs.max())
     ax.set_ylim(0, 100)
     ax.set_xlabel("Size (mm)")
     ax.set_ylabel("Cumulative % passing")
-    ax.set_title(f"Fragmentation - {R['image']}")
+    ax.set_title(f"Fragmentation - {R['image']}\nAccuracy unvalidated; fit: {R['rosin_rammler']['status']}")
     ax.grid(True, which="both", alpha=0.3)
     ax.legend(loc="upper left")
     fig.tight_layout()
-    fig.savefig(f"{stem}_curve.png")
-    plt.close(fig)
+    try:
+        fig.savefig(f"{stem}_curve.png")
+    finally:
+        plt.close(fig)
 
 
 # ============================================================================
@@ -563,16 +683,68 @@ def box(txt):
     return v
 
 
+def validate_args(args, parser):
+    for name in ("segment_length", "pole_length", "breaker", "min_size", "fit_min", "persp"):
+        value = getattr(args, name)
+        if not math.isfinite(value) or value <= 0:
+            parser.error(f"--{name.replace('_', '-')} must be finite and positive")
+    if args.scale is not None and (not math.isfinite(args.scale) or args.scale <= 0):
+        parser.error("--scale must be finite and positive")
+    if not math.isfinite(args.bypass) or not 0 <= args.bypass < args.breaker:
+        parser.error("Require 0 <= --bypass < --breaker")
+    if not math.isfinite(args.conf) or not 0 < args.conf <= 1:
+        parser.error("--conf must be in (0, 1]")
+    for name in ("work_width", "imgsz", "max_det"):
+        if getattr(args, name) <= 0:
+            parser.error(f"--{name.replace('_', '-')} must be positive")
+    if args.scale is not None and args.pole_px is not None:
+        parser.error("Choose either --scale or --pole-px")
+    for name in ("roi", "pole_px"):
+        coords = getattr(args, name)
+        if coords is not None and any(not math.isfinite(c) or c < 0 for c in coords):
+            parser.error(f"--{name.replace('_', '-')} requires finite nonnegative coordinates")
+    if args.pole_px is not None and args.pole_px[:2] == args.pole_px[2:]:
+        parser.error("--pole-px endpoints must differ")
+    if args.roi is not None:
+        x, y, w, h = args.roi
+        if w <= 0 or h <= 0:
+            parser.error("ROI width and height must be positive")
+        if all(c <= 1 for c in args.roi) and (x+w > 1 or y+h > 1):
+            parser.error("Fractional ROI must remain within the image")
+
+
+def preflight_outputs(args, parser):
+    stems = [(args.out or img.parent) / img.stem for img in args.images]
+    if args.combine and len(args.images) > 1:
+        stems.append((args.out or args.images[0].parent) / "combined")
+    names = [str(stem.resolve()).casefold() for stem in stems]
+    if len(names) != len(set(names)):
+        parser.error("Input stems collide in output paths; rename inputs or use separate runs")
+    for img in args.images:
+        if not img.is_file():
+            parser.error(f"Input is not a file: {img}. Pass explicit paths, not wildcard strings.")
+    for index, stem in enumerate(stems):
+        for path in output_paths(stem, index < len(args.images)):
+            if path.is_dir() or (path.exists() and not args.overwrite):
+                parser.error(f"Output already exists: {path}; choose another --out or use --overwrite")
+
+
 def analyse(path: Path, args):
-    bgr0 = cv2.imread(str(path))
+    data = np.fromfile(path, dtype=np.uint8)
+    bgr0 = cv2.imdecode(data, cv2.IMREAD_COLOR) if data.size else None
     if bgr0 is None:
         raise SystemExit(f"Cannot read {path}")
     k = min(1.0, args.work_width / bgr0.shape[1])
     bgr = cv2.resize(bgr0, None, fx=k, fy=k, interpolation=cv2.INTER_AREA) if k < 1 else bgr0
     H, W = bgr.shape[:2]
+    if args.pole_px is not None:
+        x1, y1, x2, y2 = args.pole_px
+        if not (0 <= x1 < bgr0.shape[1] and 0 <= x2 < bgr0.shape[1]
+                and 0 <= y1 < bgr0.shape[0] and 0 <= y2 < bgr0.shape[0]):
+            raise SystemExit("--pole-px endpoints must lie within the original image")
 
     auto = detect_pole(bgr, args.segment_length)
-    if args.scale:
+    if args.scale is not None:
         scale = ScaleResult(args.scale / k, "manual --scale")
     elif args.pole_px:
         x1, y1, x2, y2 = [c * k for c in args.pole_px]
@@ -588,6 +760,8 @@ def analyse(path: Path, args):
     if scale.pole_mask is None and auto:
         scale.pole_mask, scale.pole_line = auto.pole_mask, auto.pole_line
     mmpp = scale.mm_per_px
+    if not math.isfinite(mmpp) or mmpp <= 0:
+        raise SystemExit("Calibration did not produce a finite positive scale")
 
     roi = np.zeros((H, W), np.uint8)
     if args.roi:
@@ -595,6 +769,8 @@ def analyse(path: Path, args):
         if all(0 <= c <= 1 for c in r_):          # fractions of the photo
             r_ = [r_[0] * W / k, r_[1] * H / k, r_[2] * W / k, r_[3] * H / k]
         x, y, w, h = [int(round(c * k)) for c in r_]
+        if w <= 0 or h <= 0 or x < 0 or y < 0 or x+w > W or y+h > H:
+            raise SystemExit("ROI must be nonempty and inside the image at working resolution")
         roi[max(0, y):min(H, y + h), max(0, x):min(W, x + w)] = 1
     else:
         roi[:] = 1
@@ -605,14 +781,17 @@ def analyse(path: Path, args):
     edge_zone[:3, :] = edge_zone[-3:, :] = True
     edge_zone[:, :3] = edge_zone[:, -3:] = True
 
-    min_px = max(15, int(math.pi / 4 * (args.min_size / mmpp) ** 2))
+    # Resolution floor only; enforce the chosen physical metric after measurement.
+    min_px = 15
     print(f"[{path.name}] segmenting ...", file=sys.stderr)
     masks = run_fastsam(bgr, args.model, args.imgsz, args.conf, 0.6, args.max_det)
     labels = resolve_masks(masks, (H, W), excl, min_px)
     pole_y = (0.5 * (scale.pole_line[1] + scale.pole_line[3])
               if scale.pole_line is not None else H / 2)
     frags = measure(labels, mmpp, min_px, edge_zone, args.metric,
-                    args.weight, args.persp, pole_y)
+                    args.weight, args.persp, pole_y, min_size=args.min_size)
+    for fragment in frags:
+        fragment.source_image = str(path.resolve())
     if not args.keep_edge:
         frags = [f for f in frags if not f.edge]
     if len(frags) < 10:
@@ -620,7 +799,11 @@ def analyse(path: Path, args):
     roi_px = int((excl == 0).sum())
     cov = 100 * sum(f.area_px for f in frags) / max(roi_px, 1)
     a = dict(bgr=bgr, labels=labels, roi=roi, scale=scale)
-    meta = dict(name=path.name, mmpp=mmpp * k, method=scale.method, coverage=cov)
+    source = dict(path=str(path.resolve()), mm_per_px=mmpp*k, work_scale=k,
+                  original_size=[bgr0.shape[1], bgr0.shape[0]], work_size=[W, H],
+                  scale_method=scale.method, scale_detail=scale.detail,
+                  sha256=hashlib.sha256(data.tobytes()).hexdigest())
+    meta = dict(name=path.name, mmpp=mmpp * k, method=scale.method, coverage=cov, sources=[source])
     return frags, a, meta
 
 
@@ -663,26 +846,35 @@ def main(argv=None):
     ap.add_argument("--work-width", type=int, default=2000)
     ap.add_argument("--combine", action="store_true", help="also merge all photos")
     ap.add_argument("--out", type=Path)
+    ap.add_argument("--overwrite", action="store_true", help="explicitly replace existing reports")
     args = ap.parse_args(argv)
+    validate_args(args, ap)
+    preflight_outputs(args, ap)
 
     pooled = []
+    sources = []
     for img in args.images:
         frags, a, meta = analyse(img, args)
         outdir = args.out or img.parent
         outdir.mkdir(parents=True, exist_ok=True)
         stem = str(outdir / img.stem)
         R = report(frags, meta, args)
-        save_outputs(R, frags, a, stem, args)
-        print(f"\n  Saved {Path(stem).name}_overlay.jpg / _curve.png / _gradation.csv"
-              f" / _fragments.csv / _result.json in {outdir}")
+        try:
+            save_outputs(R, frags, a, stem, args)
+        except OSError as exc:
+            ap.exit(1, f"Output write failed: {exc}\nNo success claimed; check permissions and output files.\n")
         pooled += frags
+        sources.extend(meta["sources"])
 
     if args.combine and len(args.images) > 1:
         outdir = args.out or args.images[0].parent
-        meta = dict(name=f"COMBINED {len(args.images)} photos", mmpp=float("nan"),
-                    method="per photo", coverage=float("nan"))
+        meta = dict(name=f"COMBINED {len(args.images)} photos", mmpp=None,
+                    method="per photo", coverage=None, sources=sources)
         R = report(pooled, meta, args)
-        save_outputs(R, pooled, None, str(outdir / "combined"), args)
+        try:
+            save_outputs(R, pooled, None, str(outdir / "combined"), args)
+        except OSError as exc:
+            ap.exit(1, f"Combined output write failed: {exc}\nEarlier per-photo reports may exist.\n")
     return 0
 
 
