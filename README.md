@@ -33,7 +33,7 @@ python rock_gradation.py shot12/photo1.jpg shot12/photo2.jpg --roi 0,0.2,1,0.8 -
 
 | File | What |
 |---|---|
-| `_overlay.jpg` | blocks coloured by size class; blocks over the breaker limit are labelled in mm. **Check this first.** |
+| `_overlay.jpg` | blocks coloured by size class; blocks over the breaker limit are labelled in mm. **Check this first.** Extension follows `--overlay-format`. |
 | `_curve.png` | measured curve, Rosin-Rammler fit, fines-corrected report curve |
 | `_gradation.csv` | % passing, % retained by band, D-values, split |
 | `_fragments.csv` | every block: size, axes, position |
@@ -53,6 +53,7 @@ python rock_gradation.py shot12/photo1.jpg shot12/photo2.jpg --roi 0,0.2,1,0.8 -
 | `--drop-edge` | off | ignore blocks cut by the photo edge |
 | `--weight` | area | `area` (visible area = volume, Delesse) or `volume` |
 | `--model` | FastSAM-x.pt | `FastSAM-s.pt` is faster, with similar results |
+| `--overlay-format` | jpg | overlay container: `jpg`, `jpeg` or `png`. Use `png` where endpoint-security policy forbids scripts from creating `*.jpg` |
 
 ## How it works
 

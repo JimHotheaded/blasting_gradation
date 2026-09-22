@@ -171,6 +171,42 @@ class CliAndExportTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 g.save_outputs(r, fs, None, stem, options())
 
+    def overlay_inputs(self):
+        r, fs = report([100] * 10)
+        a = dict(bgr=np.zeros((100, 100, 3), np.uint8), labels=np.full((100, 100), 10, np.int32),
+                 roi=np.ones((100, 100), np.uint8), scale=g.ScaleResult(1., "test"))
+        return r, fs, a
+
+    def test_overlay_format_selects_extension(self):
+        self.assertEqual(g.output_paths("s")[0].name, "s_overlay.jpg")
+        self.assertEqual(g.output_paths("s", True, "png")[0].name, "s_overlay.png")
+        self.assertEqual(g.output_paths("s", True, "jpeg")[0].name, "s_overlay.jpeg")
+        self.assertNotIn("_overlay", g.output_paths("s", False, "png")[0].name)
+
+    def test_png_overlay_is_published_and_decodable(self):
+        r, fs, a = self.overlay_inputs()
+        with tempfile.TemporaryDirectory() as folder:
+            stem = str(Path(folder) / "shot")
+            with contextlib.redirect_stdout(io.StringIO()):
+                g.save_outputs(r, fs, a, stem, options(overlay_format="png"))
+            overlay = Path(stem + "_overlay.png")
+            self.assertTrue(overlay.is_file() and overlay.stat().st_size > 0)
+            image = g.cv2.imdecode(np.frombuffer(overlay.read_bytes(), np.uint8),
+                                   g.cv2.IMREAD_COLOR)
+            self.assertIsNotNone(image)
+            self.assertEqual(image.shape[:2], (100, 100))
+            self.assertFalse(Path(stem + "_overlay.jpg").exists())
+            self.assertEqual(sorted(p.name for p in Path(folder).iterdir()),
+                             sorted(p.name for p in g.output_paths(stem, True, "png")))
+
+    def test_overlay_write_failure_publishes_no_partial_report(self):
+        r, fs, a = self.overlay_inputs()
+        with tempfile.TemporaryDirectory() as folder, \
+                patch.object(Path, "write_bytes", side_effect=PermissionError("denied")):
+            with self.assertRaises(PermissionError):
+                g.save_outputs(r, fs, a, str(Path(folder) / "shot"), options(overlay_format="png"))
+            self.assertEqual(list(Path(folder).iterdir()), [])
+
     def test_encoding_failure_publishes_no_partial_report(self):
         r, fs = report([100] * 10)
         a = dict(bgr=np.zeros((100, 100, 3), np.uint8), labels=np.zeros((100, 100), np.int32),

@@ -29,8 +29,16 @@ photo; do not reuse a previous photo's ROI blindly. Calibration points from earl
 |---|---|
 | Bench face across top ~20%, rock down to the bottom | `0,0.2,1,0.8` |
 | Wall + haul road to ~30%, bare dust across bottom ~15% | `0,0.3,1,0.55` |
+| Cliff across top ~30%, blast product down to the frame bottom | `0,0.3,1,0.7` |
 
 Keep the pole well inside the ROI — scale is only true near the pole's distance.
+
+**Crop only what is not blast product** (sky, cliff, wall, haul road, water, vehicles).
+Do not crop away valid rock merely because it sits closer to the camera than the pole.
+Doing so trades a small scale bias for a much larger sampling bias: on 09222026 an
+over-tight band kept only the boulder cluster and reported 53% oversize, where keeping
+the whole muckpile gave ~35% from 183 fragments instead of 58. Use `--persp` for the
+depth gradient instead; sweeping it 1.0 → 0.5 moved that result under 3 points.
 
 ## 3. Work out the output folder
 
@@ -46,8 +54,13 @@ source patching. Unicode paths are supported. Do not rename extensions or bypass
 write failures; a failed output write stops the run.
 
 ```powershell
-.\.venv\Scripts\python.exe -B rock_gradation.py <photo> --roi <roi> --out output/<YYYY-MM-DD>
+.\.venv\Scripts\python.exe -B rock_gradation.py <photo> --roi <roi> --overlay-format png --out output/<YYYY-MM-DD>
 ```
+
+`--overlay-format png` is required on this machine: Kaspersky Endpoint Security blocks
+scripts from creating `*.jpg`, and a blocked overlay write aborts the whole report
+(outputs are staged and published only if every file succeeds). Drop the flag once the
+policy exclusion is in place. Do not rename extensions after the fact.
 
 Each photo yields five checked files. Existing outputs require a new directory or
 explicit `--overwrite`. Pass explicit image paths for combined runs. A batch uses
@@ -60,7 +73,7 @@ of the *same* muckpile, add `--combine` to pool them into one gradation.
 
 ## 5. Check the overlay — mandatory
 
-Read the generated `_overlay.jpg` with the Read tool and confirm:
+Read the generated `_overlay.png` (or `.jpg`) with the Read tool and confirm:
 
 - blocks are outlined individually, not merged into blobs or split into facets
 - the pole is masked out (drawn magenta) and not counted as rock

@@ -9,6 +9,7 @@ per band, crusher/breaker split, D-values, Cu and the Rosin-Rammler fit.
 
 Outputs (next to the photo, or in --out):
   <name>_overlay.jpg     fragments outlined, oversize labelled in mm
+                         (container set by --overlay-format: jpg, jpeg or png)
   <name>_curve.png       gradation curve with breaker line
   <name>_gradation.csv   the tables
   <name>_fragments.csv   every fragment (size, axes, position)
@@ -58,6 +59,10 @@ STD_SIZES_MM = [10, 25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 600,
                 700, 800, 900, 1000, 1200]
 BANDS_MM = [0, 10, 25, 50, 100, 200, 300, 400, 600, 800, 1000, None]
 D_VALUES = [10, 20, 30, 40, 50, 60, 70, 80, 90, 95]
+# Overlay container. Some endpoint-security policies forbid scripts from creating
+# *.jpg; "png" is a supported alternative rather than a rename workaround.
+OVERLAY_FORMATS = ["jpg", "jpeg", "png"]
+OVERLAY_DEFAULT = "jpg"
 
 
 @dataclass
@@ -525,26 +530,27 @@ def report(frags, meta, args):
     return R
 
 
-def output_paths(stem, overlay=True):
+def output_paths(stem, overlay=True, overlay_ext=OVERLAY_DEFAULT):
     suffixes = ["_gradation.csv", "_fragments.csv", "_curve.png", "_result.json"]
     if overlay:
-        suffixes.insert(0, "_overlay.jpg")
+        suffixes.insert(0, f"_overlay.{overlay_ext}")
     return [Path(str(stem) + suffix) for suffix in suffixes]
 
 
 def save_outputs(R, frags, a, stem, args):
     """Stage a complete report before publishing; JSON is published last."""
-    paths = output_paths(stem, a is not None)
+    ext = getattr(args, "overlay_format", OVERLAY_DEFAULT)
+    paths = output_paths(stem, a is not None, ext)
     if not getattr(args, "overwrite", False) and any(p.exists() for p in paths):
         raise FileExistsError(f"Output exists for {stem}; choose another --out or use --overwrite")
     parent = Path(stem).parent
     with tempfile.TemporaryDirectory(prefix=".gradation-", dir=parent) as folder:
         staged = Path(folder) / Path(stem).name
         _save_outputs(R, frags, a, str(staged), args)
-        for src, dst in zip(output_paths(staged, a is not None), paths):
+        for src, dst in zip(output_paths(staged, a is not None, ext), paths):
             if not src.is_file() or src.stat().st_size == 0:
                 raise OSError(f"Missing or empty output: {src.name}")
-        for src, dst in zip(output_paths(staged, a is not None), paths):
+        for src, dst in zip(output_paths(staged, a is not None, ext), paths):
             src.replace(dst)
     print("Saved: " + ", ".join(str(p) for p in paths))
 
@@ -630,10 +636,12 @@ def _save_outputs(R, frags, a, stem, args):
             cv2.rectangle(vis, (20, y - 14), (40, y + 2), c, -1)
             cv2.putText(vis, t, (50, y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 1, cv2.LINE_AA)
             y += 28
-        ok, encoded = cv2.imencode(".jpg", vis, [cv2.IMWRITE_JPEG_QUALITY, 90])
+        ext = getattr(args, "overlay_format", OVERLAY_DEFAULT)
+        params = [cv2.IMWRITE_JPEG_QUALITY, 90] if ext in ("jpg", "jpeg") else []
+        ok, encoded = cv2.imencode(f".{ext}", vis, params)
         if not ok:
-            raise OSError("Failed to encode overlay image")
-        Path(f"{stem}_overlay.jpg").write_bytes(encoded.tobytes())
+            raise OSError(f"Failed to encode overlay image as .{ext}")
+        Path(f"{stem}_overlay.{ext}").write_bytes(encoded.tobytes())
 
     # ---- curve
     import matplotlib
@@ -724,7 +732,7 @@ def preflight_outputs(args, parser):
         if not img.is_file():
             parser.error(f"Input is not a file: {img}. Pass explicit paths, not wildcard strings.")
     for index, stem in enumerate(stems):
-        for path in output_paths(stem, index < len(args.images)):
+        for path in output_paths(stem, index < len(args.images), args.overlay_format):
             if path.is_dir() or (path.exists() and not args.overwrite):
                 parser.error(f"Output already exists: {path}; choose another --out or use --overwrite")
 
@@ -847,6 +855,9 @@ def main(argv=None):
     ap.add_argument("--combine", action="store_true", help="also merge all photos")
     ap.add_argument("--out", type=Path)
     ap.add_argument("--overwrite", action="store_true", help="explicitly replace existing reports")
+    ap.add_argument("--overlay-format", choices=OVERLAY_FORMATS, default=OVERLAY_DEFAULT,
+                    help="overlay container (jpg). Use png where endpoint-security "
+                         "policy forbids scripts from creating *.jpg files")
     args = ap.parse_args(argv)
     validate_args(args, ap)
     preflight_outputs(args, ap)

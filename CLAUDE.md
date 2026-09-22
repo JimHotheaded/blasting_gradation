@@ -44,6 +44,11 @@ percentages, splits, D-values, and plots use one distribution definition.
 - Reports are staged before publication; JSON is published last. Multiple file
   renames are not a single transaction. Completed earlier photos can survive
   later batch failures. Existing reports require explicit `--overwrite`.
+- The overlay container follows `--overlay-format` (`jpg`, `jpeg`, `png`);
+  `output_paths()` takes the extension so staged and published names match.
+  Kaspersky Endpoint Security on this machine blocks scripts from creating
+  `*.jpg`, and because publication is all-or-nothing a blocked overlay write
+  discards the entire report, so use `png` until that policy is changed.
 - Output schema version 2 changes fragment CSV identifiers, unavailable fit
   representation, quantile semantics, and dynamic retained bands.
 
