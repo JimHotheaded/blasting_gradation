@@ -600,9 +600,13 @@ def _save_outputs(R, frags, a, stem, args):
         vis = bgr.copy()
         lut = np.zeros((labels.max() + 1, 3), np.uint8)
         for f in frags:
+            # Size classes, not crusher destinations: the 200-breaker band is
+            # the one an operator reads first. Colours are asserted by tests.
             if f.size_mm >= args.breaker:
                 lut[f.label] = (40, 40, 230)                     # red
-            elif f.size_mm >= args.bypass:
+            elif f.size_mm >= 200:
+                lut[f.label] = (30, 170, 240)                    # orange
+            elif f.size_mm >= args.fit_min:
                 lut[f.label] = (80, 200, 80)                     # green
             else:
                 lut[f.label] = (220, 170, 60)                    # blue
@@ -628,8 +632,9 @@ def _save_outputs(R, frags, a, stem, args):
                         cv2.FONT_HERSHEY_SIMPLEX, fs * 1.2, (255, 0, 255), 2, cv2.LINE_AA)
         # legend
         items = [((40, 40, 230), f">={args.breaker:g} mm breaker"),
-                 ((80, 200, 80), f"{args.bypass:g}-{args.breaker:g} crusher"),
-                 ((220, 170, 60), f"<{args.bypass:g} bypass")]
+                 ((30, 170, 240), f"200-{args.breaker:g}"),
+                 ((80, 200, 80), f"{args.fit_min:g}-200"),
+                 ((220, 170, 60), f"<{args.fit_min:g}")]
         y = 30
         cv2.rectangle(vis, (10, 8), (260, 18 + 28 * len(items)), (255, 255, 255), -1)
         for c, t in items:

@@ -199,6 +199,46 @@ class CliAndExportTests(unittest.TestCase):
             self.assertEqual(sorted(p.name for p in Path(folder).iterdir()),
                              sorted(p.name for p in g.output_paths(stem, True, "png")))
 
+    def render_overlay(self, labels, spec, size):
+        """Render an overlay for the given label image and return the decoded pixels."""
+        fs = [g.Fragment(i, 10000, s, s, s, s, 1., float(cx), float(cy), False, "photo.jpg")
+              for i, s, cx, cy in spec]
+        meta = dict(name="synthetic", mmpp=1., method="manual", coverage=100.)
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            r = g.report(fs, meta, options())
+        a = dict(bgr=np.zeros((size, size, 3), np.uint8), labels=labels,
+                 roi=np.ones((size, size), np.uint8), scale=g.ScaleResult(1., "test"))
+        with tempfile.TemporaryDirectory() as folder:
+            stem = str(Path(folder) / "shot")
+            with contextlib.redirect_stdout(io.StringIO()):
+                g.save_outputs(r, fs, a, stem, options(overlay_format="png"))
+            data = np.frombuffer(Path(stem + "_overlay.png").read_bytes(), np.uint8)
+        return g.cv2.imdecode(data, g.cv2.IMREAD_COLOR)
+
+    def assert_class_colour(self, image, row, col, colour, label):
+        # overlay blends 45% of the class colour over the photo (black here)
+        want = (np.array(colour, float) * 0.45).astype(np.uint8)
+        self.assertTrue(np.allclose(image[row, col], want, atol=1),
+                        f"{label}: got {image[row, col]}, expected {want}")
+
+    def test_overlay_uses_four_size_classes(self):
+        labels = np.zeros((600, 600), np.int32)
+        labels[:300, :300], labels[:300, 300:] = 1, 2
+        labels[300:, :300], labels[300:, 300:] = 3, 4
+        image = self.render_overlay(
+            labels, [(1, 20., 150, 150), (2, 100., 450, 150),
+                     (3, 300., 150, 450), (4, 900., 450, 450)], 600)
+        # sample well below the legend box and away from borders and mm labels
+        self.assert_class_colour(image, 200, 150, (220, 170, 60), "<50 blue")
+        self.assert_class_colour(image, 200, 450, (80, 200, 80), "50-200 green")
+        self.assert_class_colour(image, 450, 150, (30, 170, 240), "200-400 orange")
+        self.assert_class_colour(image, 350, 550, (40, 40, 230), ">=400 red")
+
+    def test_fragment_at_breaker_threshold_is_breaker_coloured(self):
+        image = self.render_overlay(np.ones((400, 400), np.int32),
+                                    [(1, 400., 200, 200)], 400)
+        self.assert_class_colour(image, 350, 350, (40, 40, 230), "exactly 400 red")
+
     def test_overlay_write_failure_publishes_no_partial_report(self):
         r, fs, a = self.overlay_inputs()
         with tempfile.TemporaryDirectory() as folder, \

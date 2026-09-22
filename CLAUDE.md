@@ -44,6 +44,10 @@ percentages, splits, D-values, and plots use one distribution definition.
 - Reports are staged before publication; JSON is published last. Multiple file
   renames are not a single transaction. Completed earlier photos can survive
   later batch failures. Existing reports require explicit `--overwrite`.
+- Overlay fragments are coloured by **size class**, not crusher destination:
+  red `>= --breaker`, orange 200-breaker, green `--fit-min`-200, blue below
+  `--fit-min`. This is a deliberate operator preference and is asserted by
+  tests; do not "correct" it to bypass/crusher/breaker destinations.
 - The overlay container follows `--overlay-format` (`jpg`, `jpeg`, `png`);
   `output_paths()` takes the extension so staged and published names match.
   Kaspersky Endpoint Security on this machine blocks scripts from creating
