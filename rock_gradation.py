@@ -75,6 +75,50 @@ class ScaleResult:
 
 
 @dataclass
+class DepthModel:
+    """mm/px as a function of image row, for rock lying on one ground plane.
+
+    A pinhole camera viewing a plane sees depth - and therefore mm/px - vary as
+    ``coeff / (row - horizon)``, not linearly with the row: a rock at half the
+    pole's distance reads twice its true size. Two calibration points at
+    different depths determine both constants exactly, so this replaces the
+    straight-line ``--persp`` ramp with the actual projective relationship.
+
+    Rows and scales are working-image pixels. Values are clamped to a band
+    around the calibration points so extrapolation beyond them stays bounded.
+    """
+    coeff: float
+    horizon: float
+    refs: tuple
+    lo: float
+    hi: float
+
+    def __call__(self, row):
+        value = self.coeff / max(float(row) - self.horizon, 1e-6)
+        return min(max(value, self.lo), self.hi)
+
+
+def fit_depth_model(refs):
+    """Solve coeff/(row - horizon) through (row, mm_per_px) calibration points."""
+    points = sorted({(float(row), float(mmpp)) for row, mmpp in refs})
+    if len(points) < 2:
+        raise ValueError("need two calibration points at different image rows")
+    (y1, m1), (y2, m2) = points[0], points[-1]
+    if abs(m1 - m2) < 1e-9:
+        raise ValueError("calibration points share the same mm/px, so they carry no depth "
+                         "information; they must sit at genuinely different distances")
+    horizon = (m1 * y1 - m2 * y2) / (m1 - m2)
+    if horizon >= y1:
+        raise ValueError("the implied horizon falls inside the measured rows; the nearer "
+                         "point must have the smaller mm/px - check which row is which")
+    coeff = m1 * (y1 - horizon)
+    if not math.isfinite(coeff) or coeff <= 0:
+        raise ValueError("calibration implies a non-physical scale")
+    scales = [m for _, m in points]
+    return DepthModel(coeff, horizon, tuple(points), min(scales) * 0.2, max(scales) * 5.0)
+
+
+@dataclass
 class Fragment:
     label: int
     area_px: int
@@ -286,9 +330,11 @@ def resolve_masks(masks, shape, excl, min_px, max_frac=0.35):
 # 3. Measurement
 # ============================================================================
 def measure(labels, mmpp, min_px, edge_zone, metric, weight="area",
-            persp=1.0, pole_y=None, min_size=0.0):
-    """persp: mm/px at the photo's bottom edge / mm/px at the pole row
-    (<1 when the foreground is closer to the camera than the pole)."""
+            persp=1.0, pole_y=None, min_size=0.0, depth=None):
+    """depth: DepthModel giving mm/px per image row; takes precedence when set.
+
+    persp: legacy straight-line fallback - mm/px at the photo's bottom edge /
+    mm/px at the pole row (<1 when the foreground is closer than the pole)."""
     frags = []
     Himg = labels.shape[0]
     n = labels.max()
@@ -308,7 +354,9 @@ def measure(labels, mmpp, min_px, edge_zone, metric, weight="area",
         area = len(xs)
         cy = float(ys.mean())
         sc = mmpp
-        if persp != 1.0 and pole_y is not None and Himg - pole_y > 1:
+        if depth is not None:
+            sc = depth(cy)
+        elif persp != 1.0 and pole_y is not None and Himg - pole_y > 1:
             sc = mmpp * max(0.2, 1 + (persp - 1) * (cy - pole_y) / (Himg - pole_y))
         ev = np.sort(np.linalg.eigvalsh(np.cov(np.vstack([xs, ys]))))[::-1]
         major = 4 * math.sqrt(max(ev[0], 1e-6))
@@ -438,7 +486,7 @@ def report(frags, meta, args):
     # it to fill the rest:  P = F + (100-F) * (m(x)-m0) / (100-m0)
     fm = args.fit_min
     use, quantile, effective = report_distribution(s, cum, fit, fm, args.fines)
-    notices = []
+    notices = list(meta.get("notices") or [])
     if fit["status"] != "fitted":
         notices.append("Rosin-Rammler fit unavailable: " + fit["reason"])
     if args.fines == "rr" and effective == "none":
@@ -449,6 +497,7 @@ def report(frags, meta, args):
     R = dict(schema_version=2, image=meta["name"], mm_per_px=rounded(meta["mmpp"], 4),
              scale_method=meta["method"], fragments=len(frags),
              weighting=args.weight, perspective=args.persp,
+             depth_model=meta.get("depth_model"),
              fines_correction=effective, fines_requested=args.fines,
              warnings=notices, accuracy_validated=False,
              delineated_pct=rounded(meta["coverage"], 1),
@@ -477,6 +526,10 @@ def report(frags, meta, args):
     print(f"  Fines corr.  : {effective} (requested {args.fines}) below {fm:.0f} mm")
     print(f"  Weighting    : {args.weight}"
           + (f",  perspective {args.persp:g}" if args.persp != 1 else ""))
+    model = meta.get("depth_model")
+    if model:
+        refs = ", ".join(f"row {row:g} = {mmpp:g} mm/px" for row, mmpp in model["references"])
+        print(f"  Depth model  : mm/px varies as 1/(row - {model['horizon_row']:g})  [{refs}]")
 
     rows, R["passing"] = [], []
     for x in STD_SIZES_MM:
@@ -696,6 +749,20 @@ def box(txt):
     return v
 
 
+def depth_ref(txt):
+    """ROW,MM_PER_PX depth calibration point, in original-photo units."""
+    parts = txt.split(",")
+    if len(parts) != 2:
+        raise argparse.ArgumentTypeError("need ROW,MM_PER_PX")
+    try:
+        row, mmpp = float(parts[0]), float(parts[1])
+    except ValueError:
+        raise argparse.ArgumentTypeError("ROW and MM_PER_PX must be numbers")
+    if not math.isfinite(row) or not math.isfinite(mmpp) or mmpp <= 0:
+        raise argparse.ArgumentTypeError("ROW must be finite and MM_PER_PX finite and positive")
+    return (row, mmpp)
+
+
 def validate_args(args, parser):
     for name in ("segment_length", "pole_length", "breaker", "min_size", "fit_min", "persp"):
         value = getattr(args, name)
@@ -712,6 +779,11 @@ def validate_args(args, parser):
             parser.error(f"--{name.replace('_', '-')} must be positive")
     if args.scale is not None and args.pole_px is not None:
         parser.error("Choose either --scale or --pole-px")
+    if args.persp_ref and args.persp != 1.0:
+        parser.error("--persp-ref fits the depth curve from measurements and replaces the "
+                     "--persp straight line; use one or the other")
+    if args.persp_ref and len({row for row, _ in args.persp_ref}) != len(args.persp_ref):
+        parser.error("--persp-ref rows must differ; each point needs its own distance")
     for name in ("roi", "pole_px"):
         coords = getattr(args, name)
         if coords is not None and any(not math.isfinite(c) or c < 0 for c in coords):
@@ -801,8 +873,22 @@ def analyse(path: Path, args):
     labels = resolve_masks(masks, (H, W), excl, min_px)
     pole_y = (0.5 * (scale.pole_line[1] + scale.pole_line[3])
               if scale.pole_line is not None else H / 2)
+    depth, refs = None, []
+    if scale.pole_line is not None:
+        refs.append((pole_y, mmpp))
+    for row, ref_mmpp in (args.persp_ref or []):
+        refs.append((row * k, ref_mmpp / k))     # caller gives original-photo units
+    if args.persp_ref:
+        if len(refs) < 2:
+            raise SystemExit(
+                "--persp-ref needs a second depth reference. Either pass two --persp-ref "
+                "points, or use a photo whose pole is detected so it supplies the first.")
+        try:
+            depth = fit_depth_model(refs)
+        except ValueError as exc:
+            raise SystemExit(f"Perspective calibration failed: {exc}")
     frags = measure(labels, mmpp, min_px, edge_zone, args.metric,
-                    args.weight, args.persp, pole_y, min_size=args.min_size)
+                    args.weight, args.persp, pole_y, min_size=args.min_size, depth=depth)
     for fragment in frags:
         fragment.source_image = str(path.resolve())
     if not args.keep_edge:
@@ -816,7 +902,18 @@ def analyse(path: Path, args):
                   original_size=[bgr0.shape[1], bgr0.shape[0]], work_size=[W, H],
                   scale_method=scale.method, scale_detail=scale.detail,
                   sha256=hashlib.sha256(data.tobytes()).hexdigest())
-    meta = dict(name=path.name, mmpp=mmpp * k, method=scale.method, coverage=cov, sources=[source])
+    model = None
+    if depth is not None:
+        model = dict(kind="inverse-row", horizon_row=rounded(depth.horizon / k, 1),
+                     references=[[rounded(row / k, 1), rounded(ref * k, 4)]
+                                 for row, ref in depth.refs])
+    # No automatic "you need perspective correction" warning: the only signal
+    # available from one photo is how far fragments sit from the pole row, and
+    # row spread is not depth spread. A square-on shot spans many rows at nearly
+    # constant depth, so that test fires on good photos too. Whether a depth
+    # model was applied is recorded factually in depth_model / perspective.
+    meta = dict(name=path.name, mmpp=mmpp * k, method=scale.method, coverage=cov,
+                sources=[source], depth_model=model, notices=[])
     return frags, a, meta
 
 
@@ -846,6 +943,12 @@ def main(argv=None):
     ap.add_argument("--weight", choices=["area", "volume"], default="area",
                     help="area = visible-area fraction (Delesse, default); "
                          "volume = per-block ellipsoid")
+    ap.add_argument("--persp-ref", action="append", type=depth_ref, metavar="ROW,MM_PER_PX",
+                    help="depth calibration point in ORIGINAL photo pixels: the pole's image "
+                         "row and its mm/px, taken from another photo shot from the same "
+                         "camera position with the pole at a different distance. Repeatable. "
+                         "Together with this photo's own pole it fits the true "
+                         "1/(row-horizon) depth curve instead of the --persp straight line")
     ap.add_argument("--persp", type=float, default=1.0,
                     help="perspective: scale at photo bottom / scale at pole row, "
                          "e.g. 0.7 if foreground is ~30%% closer (default 1 = off)")

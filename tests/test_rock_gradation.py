@@ -131,6 +131,58 @@ class MaskTests(unittest.TestCase):
         self.assertEqual(g.measure(labels, 1, 15, edge, "ecd", persp=.2, pole_y=0, min_size=30), [])
 
 
+class DepthTests(unittest.TestCase):
+    def test_model_reproduces_calibration_and_falls_off_with_row(self):
+        model = g.fit_depth_model([(665, 4.396), (1633, 2.198)])
+        self.assertAlmostEqual(model(665), 4.396, places=3)
+        self.assertAlmostEqual(model(1633), 2.198, places=3)
+        self.assertLess(model.horizon, 665)             # horizon sits above the rock
+        rows = [700, 900, 1100, 1300, 1500]
+        scales = [model(r) for r in rows]
+        self.assertEqual(scales, sorted(scales, reverse=True))   # nearer -> fewer mm/px
+
+    def test_model_rejects_unusable_calibration(self):
+        for refs in ([(665, 4.4)],                       # one point
+                     [(665, 4.4), (1633, 4.4)],          # no depth information
+                     [(665, 2.0), (1633, 4.4)]):         # nearer point reads larger
+            with self.assertRaises(ValueError):
+                g.fit_depth_model(refs)
+
+    def test_measure_scales_each_fragment_by_its_row(self):
+        labels = np.zeros((800, 200), np.int32)
+        labels[100:140, 50:150] = 1                      # far from the camera
+        labels[600:640, 50:150] = 2                      # near the camera
+        edge = np.zeros_like(labels, bool)
+        model = g.fit_depth_model([(120, 4.0), (620, 2.0)])
+        far, near = sorted(g.measure(labels, 4.0, 15, edge, "minor", depth=model),
+                           key=lambda f: f.cy)
+        self.assertAlmostEqual(far.size_mm / near.size_mm, 2.0, places=2)
+        # without a model both identical shapes measure the same
+        a, b = g.measure(labels, 4.0, 15, edge, "minor")
+        self.assertAlmostEqual(a.size_mm, b.size_mm, places=6)
+
+    def test_depth_model_overrides_the_linear_persp_ramp(self):
+        labels = np.zeros((800, 200), np.int32)
+        labels[600:640, 50:150] = 1
+        edge = np.zeros_like(labels, bool)
+        model = g.fit_depth_model([(120, 4.0), (620, 2.0)])
+        with_model = g.measure(labels, 4.0, 15, edge, "minor", persp=0.9,
+                               pole_y=120, depth=model)[0]
+        self.assertAlmostEqual(with_model.size_mm,
+                               g.measure(labels, 4.0, 15, edge, "minor", depth=model)[0].size_mm,
+                               places=6)
+
+    def test_analysis_notices_reach_report_warnings(self):
+        fs = fragments([50, 100, 200, 400])
+        meta = dict(name="synthetic", mmpp=1., method="manual", coverage=100.,
+                    notices=["No perspective model: 44% of measured area ..."],
+                    depth_model=None)
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            r = g.report(fs, meta, options())
+        self.assertIn(meta["notices"][0], r["warnings"])
+        self.assertIsNone(r["depth_model"])
+
+
 class CliAndExportTests(unittest.TestCase):
     def test_invalid_options_fail_before_analysis(self):
         cases = [["--scale", "0"], ["--scale", "nan"], ["--work-width", "0"],

@@ -44,6 +44,14 @@ percentages, splits, D-values, and plots use one distribution definition.
 - Reports are staged before publication; JSON is published last. Multiple file
   renames are not a single transaction. Completed earlier photos can survive
   later batch failures. Existing reports require explicit `--overwrite`.
+- Perspective: `--persp-ref ROW,MM_PER_PX` (repeatable, original-photo units)
+  plus the photo's own pole fits `DepthModel`, `mm/px = coeff/(row - horizon)`,
+  the actual projective relation for a ground plane. `measure(depth=...)` takes
+  precedence over the legacy linear `--persp`; both are mutually exclusive.
+  `fit_depth_model()` rejects single points, equal mm/px, and calibrations whose
+  implied horizon falls inside the measured rows. There is deliberately **no**
+  automatic "needs perspective correction" warning: row spread is not depth
+  spread, so that test false-positives on square-on photos.
 - Overlay fragments are coloured by **size class**, not crusher destination:
   red `>= --breaker`, orange 200-breaker, green `--fit-min`-200, blue below
   `--fit-min`. This is a deliberate operator preference and is asserted by

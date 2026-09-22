@@ -37,8 +37,8 @@ Keep the pole well inside the ROI — scale is only true near the pole's distanc
 Do not crop away valid rock merely because it sits closer to the camera than the pole.
 Doing so trades a small scale bias for a much larger sampling bias: on 09222026 an
 over-tight band kept only the boulder cluster and reported 53% oversize, where keeping
-the whole muckpile gave ~35% from 183 fragments instead of 58. Use `--persp` for the
-depth gradient instead; sweeping it 1.0 → 0.5 moved that result under 3 points.
+the whole muckpile gave ~35% from 183 fragments instead of 58. Handle the depth gradient with
+`--persp-ref` instead (step 4), not by cropping.
 
 ## 3. Work out the output folder
 
@@ -61,6 +61,16 @@ write failures; a failed output write stops the run.
 scripts from creating `*.jpg`, and a blocked overlay write aborts the whole report
 (outputs are staged and published only if every file succeeds). Drop the flag once the
 policy exclusion is in place. Do not rename extensions after the fact.
+
+**Perspective.** Scale is only true at the pole's distance; a rock at half that
+distance reads twice its size, and area weighting squares the error. If the shot
+looks down a slope rather than square-on at the pile, say so in the report and
+treat the oversize count as an upper bound. If the user has a second photo taken
+from the same camera position with the pole at a different distance, calibrate:
+run that photo, take its `mm/px` and pole row, and pass `--persp-ref ROW,MM_PER_PX`
+(original-photo pixels). The script then fits `mm/px = coeff/(row - horizon)` and
+prints the model. There is no automatic warning for this — row spread is not depth
+spread — so judge it from the photo in step 1.
 
 Each photo yields five checked files. Existing outputs require a new directory or
 explicit `--overwrite`. Pass explicit image paths for combined runs. A batch uses

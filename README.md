@@ -47,7 +47,8 @@ python rock_gradation.py shot12/photo1.jpg shot12/photo2.jpg --roi 0,0.2,1,0.8 -
 | `--bypass` | 10 | size that bypasses the crusher, mm |
 | `--segment-length` | 400 | one red or white pole segment, mm |
 | `--roi` | whole photo | x,y,w,h in pixels or fractions |
-| `--persp` | 1 (off) | scale at photo bottom ÷ scale at pole, e.g. 0.8 when the foreground is closer |
+| `--persp-ref` | off | `ROW,MM_PER_PX` depth calibration from a second photo (see below). Fits the true `1/(row-horizon)` curve. Repeatable |
+| `--persp` | 1 (off) | crude straight-line fallback: scale at photo bottom ÷ scale at pole. Prefer `--persp-ref` |
 | `--scale` | auto | mm per pixel, when there is no pole |
 | `--pole-px` | auto | x1,y1,x2,y2: ends of the **painted** segments (not the black tip) |
 | `--drop-edge` | off | ignore blocks cut by the photo edge |
@@ -73,6 +74,42 @@ python rock_gradation.py shot12/photo1.jpg shot12/photo2.jpg --roi 0,0.2,1,0.8 -
    rescaled to fill the rest. If fitting is unsupported or fails, the report
    uses measured values and explicitly records a warning. This correction
    has not been calibrated against physical sieve measurements.
+
+## Perspective: why nearer rock reads too large
+
+Scale is only true at the pole's distance. A rock at half that distance reads
+**twice** its real size, and because gradation weights by area the mass error is
+**four times** — so uncorrected foreground rock inflates the oversize fraction.
+
+By default nothing corrects this: every fragment uses the pole's mm/px.
+
+**The reliable fix is to shoot square-on**, so all visible rock sits at roughly
+one distance. Then no correction is needed.
+
+When you must shoot down a slope, calibrate the depth instead of guessing:
+
+1. From one camera position, photograph the pole lying at the **far** end of the
+   muckpile, then again at the **near** end. Do not move the camera.
+2. Run the script on the near photo and note two numbers it prints: the scale
+   (`mm/px`) and the pole's image row (from `_result.json` → `sources[0]`, or
+   the magenta pole line in the overlay).
+3. Analyse the far photo, passing the near photo's numbers:
+
+```
+python rock_gradation.py far.jpg --roi 0,0.3,1,0.7 --persp-ref 1633,2.198
+```
+
+The photo's own pole supplies the second point, so the script solves the horizon
+and applies `mm/px = coeff / (row - horizon)` per fragment. It prints the fitted
+model and records it in `_result.json` under `depth_model`.
+
+Rows and mm/px are in **original photo pixels**. The nearer reference must have
+the smaller mm/px; the script rejects calibrations that imply otherwise rather
+than producing a silently wrong curve.
+
+On a test shot this moved the oversize count from 8 blocks to 3, while the
+boulder at the pole's own distance barely changed — the near-field rocks were
+the ones being over-measured.
 
 ## Accuracy — read before reporting
 
