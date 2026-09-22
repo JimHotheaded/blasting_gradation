@@ -35,7 +35,7 @@ Keep the pole well inside the ROI — scale is only true near the pole's distanc
 
 **Crop only what is not blast product** (sky, cliff, wall, haul road, water, vehicles).
 Do not crop away valid rock merely because it sits closer to the camera than the pole.
-Doing so trades a small scale bias for a much larger sampling bias: on 09222026 an
+Doing so trades a small scale bias for a much larger sampling bias: on 09212026 an
 over-tight band kept only the boulder cluster and reported 53% oversize, where keeping
 the whole muckpile gave ~35% from 183 fragments instead of 58. Handle the depth gradient with
 `--persp-ref` instead (step 4), not by cropping.

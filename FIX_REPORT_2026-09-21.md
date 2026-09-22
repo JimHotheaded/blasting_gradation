@@ -1,10 +1,10 @@
 # Audit Fix Handoff for Claude
 
-Date: 2026-09-22
+Date: 2026-09-21
 
 ## Outcome
 
-Implemented fixes for all ten findings in `AUDIT_REPORT_2026-09-22.md`, added
+Implemented fixes for all ten findings in `AUDIT_REPORT_2026-09-21.md`, added
 18 passing regression tests, and updated usage and agent instructions. Changes
 are local and uncommitted. The original audit is preserved as historical evidence.
 
@@ -25,7 +25,7 @@ or a fully passed real-photo acceptance test.
 | `README.md` | Current usage, schema changes, limitations, test command |
 | `CLAUDE.md` | Current architecture and contracts for subsequent work |
 | `AGENTS.md` | Updated structure and test instructions; already existed as an untracked file |
-| `FIX_REPORT_2026-09-22.md` | This handoff |
+| `FIX_REPORT_2026-09-21.md` | This handoff |
 
 No source photos, historical analysis outputs, example assets, model weights,
 or dependency declarations were intentionally changed. No packages were installed.
@@ -99,7 +99,7 @@ Inspected `stockpile_picture/09182026.jpg`: pole visible; upper bench background
 motivated the existing 20% top exclusion. Ran:
 
 ```powershell
-.\.venv\Scripts\python.exe -B rock_gradation.py stockpile_picture/09182026.jpg --roi 0,0.2,1,0.8 --out output/audit-fixes-2026-09-22
+.\.venv\Scripts\python.exe -B rock_gradation.py stockpile_picture/09182026.jpg --roi 0,0.2,1,0.8 --out output/audit-fixes-2026-09-21
 ```
 
 Inference and console reporting completed on two attempts. The intermediate

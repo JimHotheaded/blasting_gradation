@@ -1,7 +1,7 @@
 # CLAUDE.md
 
-Read `FIX_REPORT_2026-09-22.md` for the audit-fix handoff and validation evidence.
-`AUDIT_REPORT_2026-09-22.md` describes the old defects and remains historical.
+Read `FIX_REPORT_2026-09-21.md` for the audit-fix handoff and validation evidence.
+`AUDIT_REPORT_2026-09-21.md` describes the old defects and remains historical.
 
 ## Structure and commands
 
