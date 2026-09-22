@@ -17,7 +17,7 @@ the folder you run it from. After that it works offline. A GPU is not required. 
 ## Run
 
 ```
-python rock_gradation.py IMG_7350.jpeg --roi 0,0.2,1,0.8
+python rock_gradation.py muckpile.jpg --roi 0,0.2,1,0.8
 ```
 
 `--roi 0,0.2,1,0.8` skips the top 20% of the photo (bench face and far-away
@@ -151,10 +151,7 @@ the ones being over-measured.
 - Fragment CSV IDs are unique within the export; `source_image` and
   `source_label` identify the original image and segmentation label. Pixel
   coordinates refer to that image's downscaled working resolution.
-- Unicode paths are supported directly. `.claude/gradation_run.py` is now a
-  compatibility entry point; no rename workaround is needed or attempted.
-- Existing files in `example/` and old `output/` folders are historical outputs,
-  not regenerated validation results for this version.
+- Unicode paths are supported directly; no rename workaround is needed.
 
 ## Regression tests
 

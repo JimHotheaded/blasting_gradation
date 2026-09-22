@@ -1,8 +1,5 @@
 # CLAUDE.md
 
-Read `FIX_REPORT_2026-09-21.md` for the audit-fix handoff and validation evidence.
-`AUDIT_REPORT_2026-09-21.md` describes the old defects and remains historical.
-
 ## Structure and commands
 
 This Git repository has a single-file Python CLI, `rock_gradation.py`, and
@@ -14,9 +11,8 @@ Use the repository virtual environment from the repository root:
 .\.venv\Scripts\python.exe -B rock_gradation.py stockpile_picture/09182026.jpg --roi 0,0.2,1,0.8 --out output/new-run
 ```
 
-`.claude/gradation_run.py` delegates to the same CLI. It does not patch source,
-change working directories, change file extensions, or print rename workarounds.
-Input/output/model paths are relative to the caller's current directory.
+Input/output/model paths are relative to the caller's current directory. There is
+no wrapper script: invoke `rock_gradation.py` directly.
 
 ## Pipeline
 

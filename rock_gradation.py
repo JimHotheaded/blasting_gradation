@@ -17,7 +17,7 @@ Outputs (next to the photo, or in --out):
 
 Quick start
   pip install ultralytics opencv-python numpy scipy matplotlib
-  python rock_gradation.py IMG_7350.jpeg --roi 0,0.2,1,0.8
+  python rock_gradation.py muckpile.jpg --roi 0,0.2,1,0.8
 
   First run downloads the FastSAM-x weights (~140 MB) automatically.
 

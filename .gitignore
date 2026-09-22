@@ -9,6 +9,9 @@ output/
 # rock_gradation.py downloads these automatically on first run.
 *.pt
 
+# git worktrees created for isolated edits
+.claude/worktrees/
+
 # python
 __pycache__/
 *.py[cod]
