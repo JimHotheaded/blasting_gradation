@@ -53,6 +53,7 @@ python rock_gradation.py shot12/photo1.jpg shot12/photo2.jpg --roi 0,0.2,1,0.8 -
 | `--pole-px` | auto | x1,y1,x2,y2: ends of the **painted** segments (not the black tip) |
 | `--drop-edge` | off | ignore blocks cut by the photo edge |
 | `--weight` | area | `area` (visible area = volume, Delesse) or `volume` |
+| `--fit-min` | 100 | rock below this size is treated as fines and taken from the Rosin-Rammler fit; matches the overlay's blue class |
 | `--model` | FastSAM-x.pt | `FastSAM-s.pt` is faster, with similar results |
 | `--overlay-format` | jpg | overlay container: `jpg`, `jpeg` or `png`. Use `png` where endpoint-security policy forbids scripts from creating `*.jpg` |
 
@@ -69,7 +70,7 @@ python rock_gradation.py shot12/photo1.jpg shot12/photo2.jpg --roi 0,0.2,1,0.8 -
 4. **Grade.** Cumulative % passing weighted by calibrated visible area.
    This is an approximation; a photographed pile surface is not a random
    section and does not establish bulk volume fractions.
-5. **Fines correction.** The camera cannot see fines in voids. Below 50 mm
+5. **Fines correction.** The camera cannot see fines in voids. Below 100 mm
    the Rosin-Rammler curve is used, and the measured curve above that is
    rescaled to fill the rest. If fitting is unsupported or fails, the report
    uses measured values and explicitly records a warning. This correction

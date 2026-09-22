@@ -64,6 +64,11 @@ percentages, splits, D-values, and plots use one distribution definition.
   Kaspersky Endpoint Security on this machine blocks scripts from creating
   `*.jpg`, and because publication is all-or-nothing a blocked overlay write
   discards the entire report, so use `png` until that policy is changed.
+- `--fit-min` defaults to **100 mm**: rock below it is reported from the
+  Rosin-Rammler fit rather than measurement, so the threshold matches the
+  overlay's blue class. It sets both the fit's lower bound and the chart's
+  shaded region, so moving it changes D-values at the fine end (D10, D30)
+  while leaving the coarse end and the breaker split essentially untouched.
 - Output schema version 2 changes fragment CSV identifiers, unavailable fit
   representation, quantile semantics, and dynamic retained bands.
 

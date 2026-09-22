@@ -737,7 +737,8 @@ def _save_outputs(R, frags, a, stem, args):
             color="#2c3e50", fontsize=9)
     if effective == "rr":
         ax.axvspan(1, args.fit_min, color="#999", alpha=0.12)
-        ax.text(args.fit_min * 0.95, 55, "fines:\nRR-corrected\n(not visible)", ha="right",
+        ax.text(args.fit_min * 0.95, 55,
+                f"fines <{args.fit_min:g} mm:\nRR-corrected\n(not visible)", ha="right",
                 fontsize=8, color="#666")
     ax.set_xscale("log")
     ax.set_xlim(5, xs.max())
@@ -949,8 +950,9 @@ def main(argv=None):
     ap.add_argument("--breaker", type=float, default=400, help="oversize limit, mm (400)")
     ap.add_argument("--bypass", type=float, default=10, help="crusher bypass size, mm (10)")
     ap.add_argument("--min-size", type=float, default=30, help="smallest fragment kept, mm (30)")
-    ap.add_argument("--fit-min", type=float, default=50,
-                    help="fines correction below this size, mm (50)")
+    ap.add_argument("--fit-min", type=float, default=100,
+                    help="treat rock below this size as fines and take it from the "
+                         "Rosin-Rammler fit, mm (100). Matches the overlay's blue class")
     ap.add_argument("--fines", choices=["rr", "none"], default="rr",
                     help="fines correction below --fit-min (rr = Rosin-Rammler, default)")
     ap.add_argument("--metric", choices=["minor", "mean", "ecd"], default="minor",

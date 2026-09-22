@@ -349,6 +349,27 @@ class CliAndExportTests(unittest.TestCase):
             self.assertEqual(data["fragments"], 20)
             self.assertEqual(len(data["sources"]), 2)
 
+    def test_fines_threshold_defaults_to_100(self):
+        seen = {}
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            image = root / "one.png"
+            image.touch()
+            def analyse(path, args):
+                seen["fit_min"] = args.fit_min
+                fs = fragments([40, 60, 100, 200, 320, 400, 600, 800, 900, 1000])
+                for f in fs:
+                    f.source_image = str(path)
+                return fs, None, dict(name=path.name, mmpp=1., method="test", coverage=80.,
+                                      sources=[dict(path=str(path))])
+            with patch.object(g, "analyse", side_effect=analyse), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(g.main([str(image), "--out", str(root / "out")]), 0)
+            data = json.loads((root / "out/one_result.json").read_text(encoding="utf-8"))
+        # fines now means "below 100 mm", matching the overlay's blue class
+        self.assertEqual(seen["fit_min"], 100)
+        self.assertEqual(data["settings"]["fit_min"], 100)
+
     def test_existing_output_rejected_before_model_load(self):
         with tempfile.TemporaryDirectory() as folder:
             photo = Path(folder) / "photo.png"
