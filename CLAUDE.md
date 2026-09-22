@@ -53,9 +53,12 @@ percentages, splits, D-values, and plots use one distribution definition.
   automatic "needs perspective correction" warning: row spread is not depth
   spread, so that test false-positives on square-on photos.
 - Overlay fragments are coloured by **size class**, not crusher destination:
-  red `>= --breaker`, orange 200-breaker, green `--fit-min`-200, blue below
-  `--fit-min`. This is a deliberate operator preference and is asserted by
-  tests; do not "correct" it to bypass/crusher/breaker destinations.
+  red `>= --breaker`, then `OVERLAY_EDGES` (300, 100 mm) giving orange 300-400,
+  green 100-300, blue below 100. `overlay_classes()` builds the colouring and
+  the legend from one list so they cannot drift, and drops edges at or above
+  `--breaker` so a custom threshold never yields an inverted band. The edges are
+  independent of `--fit-min`. This is a deliberate operator preference and is
+  asserted by tests; do not "correct" it to bypass/crusher/breaker destinations.
 - The overlay container follows `--overlay-format` (`jpg`, `jpeg`, `png`);
   `output_paths()` takes the extension so staged and published names match.
   Kaspersky Endpoint Security on this machine blocks scripts from creating

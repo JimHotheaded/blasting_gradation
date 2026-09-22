@@ -63,6 +63,27 @@ D_VALUES = [10, 20, 30, 40, 50, 60, 70, 80, 90, 95]
 # *.jpg; "png" is a supported alternative rather than a rename workaround.
 OVERLAY_FORMATS = ["jpg", "jpeg", "png"]
 OVERLAY_DEFAULT = "jpg"
+# Overlay size-class edges below --breaker, coarsest first, in mm. Independent
+# of --fit-min: these are what an operator reads off the picture, not the fines
+# threshold. Colours are BGR, and are asserted by tests.
+OVERLAY_EDGES = (300.0, 100.0)
+OVERLAY_COLOURS = ((40, 40, 230), (30, 170, 240), (80, 200, 80), (220, 170, 60))
+
+
+def overlay_classes(breaker):
+    """(lower_edge, colour, legend label) per size class, coarsest first.
+
+    Edges at or above --breaker are dropped, so a custom breaker threshold can
+    never produce an inverted band such as "300-250".
+    """
+    red, orange, green, blue = OVERLAY_COLOURS
+    classes = [(float(breaker), red, f">={breaker:g} mm breaker")]
+    upper = float(breaker)
+    for edge, colour in zip((e for e in OVERLAY_EDGES if e < breaker), (orange, green)):
+        classes.append((edge, colour, f"{edge:g}-{upper:g}"))
+        upper = edge
+    classes.append((0.0, blue, f"<{upper:g}"))
+    return classes
 
 
 @dataclass
@@ -651,18 +672,15 @@ def _save_outputs(R, frags, a, stem, args):
     if a is not None:
         bgr, labels = a["bgr"], a["labels"]
         vis = bgr.copy()
+        classes = overlay_classes(args.breaker)
         lut = np.zeros((labels.max() + 1, 3), np.uint8)
         for f in frags:
-            # Size classes, not crusher destinations: the 200-breaker band is
-            # the one an operator reads first. Colours are asserted by tests.
-            if f.size_mm >= args.breaker:
-                lut[f.label] = (40, 40, 230)                     # red
-            elif f.size_mm >= 200:
-                lut[f.label] = (30, 170, 240)                    # orange
-            elif f.size_mm >= args.fit_min:
-                lut[f.label] = (80, 200, 80)                     # green
-            else:
-                lut[f.label] = (220, 170, 60)                    # blue
+            # Size classes, not crusher destinations: the band just under the
+            # breaker limit is the one an operator reads first.
+            for lower, colour, _ in classes:
+                if f.size_mm >= lower:
+                    lut[f.label] = colour
+                    break
         col = lut[labels]
         msk = col.any(-1)
         vis[msk] = (0.55 * vis[msk] + 0.45 * col[msk]).astype(np.uint8)
@@ -684,10 +702,7 @@ def _save_outputs(R, frags, a, stem, args):
             cv2.putText(vis, f"{R['mm_per_px']:.2f} mm/px", (x1, y1 - 12),
                         cv2.FONT_HERSHEY_SIMPLEX, fs * 1.2, (255, 0, 255), 2, cv2.LINE_AA)
         # legend
-        items = [((40, 40, 230), f">={args.breaker:g} mm breaker"),
-                 ((30, 170, 240), f"200-{args.breaker:g}"),
-                 ((80, 200, 80), f"{args.fit_min:g}-200"),
-                 ((220, 170, 60), f"<{args.fit_min:g}")]
+        items = [(colour, label) for _, colour, label in classes]
         y = 30
         cv2.rectangle(vis, (10, 8), (260, 18 + 28 * len(items)), (255, 255, 255), -1)
         for c, t in items:

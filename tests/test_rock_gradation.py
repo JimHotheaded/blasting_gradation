@@ -273,17 +273,28 @@ class CliAndExportTests(unittest.TestCase):
         self.assertTrue(np.allclose(image[row, col], want, atol=1),
                         f"{label}: got {image[row, col]}, expected {want}")
 
+    def test_overlay_class_edges(self):
+        self.assertEqual([(lower, label) for lower, _, label in g.overlay_classes(400)],
+                         [(400.0, ">=400 mm breaker"), (300.0, "300-400"),
+                          (100.0, "100-300"), (0.0, "<100")])
+        # edges at or above the breaker are dropped, never inverted as "300-250"
+        self.assertEqual([label for _, _, label in g.overlay_classes(250)],
+                         [">=250 mm breaker", "100-250", "<100"])
+        self.assertNotIn("fit_min", str(g.overlay_classes(400)))
+
     def test_overlay_uses_four_size_classes(self):
         labels = np.zeros((600, 600), np.int32)
         labels[:300, :300], labels[:300, 300:] = 1, 2
         labels[300:, :300], labels[300:, 300:] = 3, 4
+        # sizes chosen to discriminate the 400/300/100 edges: under the old
+        # 400/200/50 scheme 60 mm was green and 250 mm was orange
         image = self.render_overlay(
-            labels, [(1, 20., 150, 150), (2, 100., 450, 150),
-                     (3, 300., 150, 450), (4, 900., 450, 450)], 600)
+            labels, [(1, 60., 150, 150), (2, 250., 450, 150),
+                     (3, 350., 150, 450), (4, 900., 450, 450)], 600)
         # sample well below the legend box and away from borders and mm labels
-        self.assert_class_colour(image, 200, 150, (220, 170, 60), "<50 blue")
-        self.assert_class_colour(image, 200, 450, (80, 200, 80), "50-200 green")
-        self.assert_class_colour(image, 450, 150, (30, 170, 240), "200-400 orange")
+        self.assert_class_colour(image, 200, 150, (220, 170, 60), "<100 blue")
+        self.assert_class_colour(image, 200, 450, (80, 200, 80), "100-300 green")
+        self.assert_class_colour(image, 450, 150, (30, 170, 240), "300-400 orange")
         self.assert_class_colour(image, 350, 550, (40, 40, 230), ">=400 red")
 
     def test_fragment_at_breaker_threshold_is_breaker_coloured(self):
