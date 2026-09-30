@@ -6,6 +6,23 @@ cumulative % passing, % retained per band, the fines / crusher / breaker split
 (under 100 mm / 100-400 mm / 400 mm and over),
 D10–D95, Cu and a Rosin-Rammler fit.
 
+## Operating target
+
+The operating definition clarified by the user on 2026-09-30 is:
+
+| Rock size | Handling |
+|---|---|
+| Below 100 mm | Fines pass through the excavator's screening bucket. |
+| 100-400 mm | Target rock size range. |
+| Above 400 mm | Acceptable material; use a hydraulic breaker to reduce it to the target range. |
+
+Oversize percentage indicates additional breaker workload, not rejected material.
+
+**Current software boundary:** exactly 400 mm is counted as breaker material
+(`>=400`); target feed is `100 <= size < 400`. The operating description above
+includes 400 mm in the target range. This documented clarification does not change
+the calculation or existing reports.
+
 ## Setup (once)
 
 ```

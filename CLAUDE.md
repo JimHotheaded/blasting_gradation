@@ -28,6 +28,20 @@ single script invocation using existing notes; do not inspect images/PDFs or
 write judgements during that command. Missing review notes are a blocking input,
 not permission to start an AI review. Review only when separately requested.
 
+## Operating target (user clarification, 2026-09-30)
+
+- **Below 100 mm:** fines pass through the excavator's screening bucket.
+- **100-400 mm:** target rock size range.
+- **Above 400 mm:** acceptable material requiring a hydraulic breaker to reduce
+  it to the target range. Oversize indicates additional breaker workload, not
+  rejected material.
+
+Boundary note: the user's operating description includes 400 mm in the target
+range. The current calculation/export contract instead assigns exactly 400 mm
+to breaker material (`>=400`), with target feed `100 <= size < 400`.
+This clarification records operating intent; it does not change calculations.
+Keep this distinction explicit when interpreting existing reports.
+
 ## Pipeline
 
 `main()` validates arguments and output paths before `analyse()` processes each
