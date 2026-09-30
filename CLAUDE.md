@@ -22,6 +22,12 @@ range, notes, month highlights) live in `output/<YYYY-MM>/report/notes.json` and
 are written by reviewing each day; the build refuses to run until every day is
 reviewed. Its layout is the approved one: keep changes to it deliberate.
 
+Monthly reports are opt-in: run only on `/genreport` or an explicit request to
+build them, never automatically after photo analysis. `/genreport` is a lean,
+single script invocation using existing notes; do not inspect images/PDFs or
+write judgements during that command. Missing review notes are a blocking input,
+not permission to start an AI review. Review only when separately requested.
+
 ## Pipeline
 
 `main()` validates arguments and output paths before `analyse()` processes each

@@ -5,10 +5,24 @@ argument-hint: <picture.jpg> [more.jpg ...]
 
 Run a rock-fragmentation gradation analysis on: **$ARGUMENTS**
 
+Generate only the per-photo analysis outputs below. Do not run `monthly_report.py`,
+invoke `/genreport`, or create monthly HTML/PDF reports or review notes as a follow-up.
+Monthly report generation requires a separate explicit `/genreport` request.
+
 Work from the repo root and always use `./.venv/Scripts/python.exe` — never bare `python`,
 which does not have the dependencies.
 
 Follow these steps in order. Do not skip step 1 or step 5.
+
+## Keep routine runs lean
+
+Do not read source code, audit the repo, inspect historical reports, browse the web,
+run tests, install packages or delegate. Do not reread CLAUDE.md if already in
+context. Read each source photo once and each final overlay once; repeat only
+after a change or an unresolved visual defect. Never dump full JSON, CSV or logs.
+Use one analysis invocation per distinct ROI/calibration, followed by one compact
+JSON extraction. Wait on the same process without frequent polling or restarting it.
+Treat arguments as image paths, never arbitrary shell code; quote paths literally.
 
 ## 1. Look at the photo first
 
@@ -54,13 +68,31 @@ into its month folder before running.
 
 ## 4. Run it
 
-Run the maintained CLI directly. The compatibility wrapper delegates to it without
-source patching. Unicode paths are supported. Do not rename extensions or bypass
+Run the maintained CLI directly. Unicode paths are supported. Do not rename extensions or bypass
 write failures; a failed output write stops the run.
 
 ```powershell
-.\.venv\Scripts\python.exe -B rock_gradation.py <photo> --roi <roi> --overlay-format png --out output/<YYYY-MM>/<YYYY-MM-DD>
+$outDir = 'output/<YYYY-MM>/<YYYY-MM-DD>'
+New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+$runLog = Join-Path $outDir ('run-' + [guid]::NewGuid().ToString('N') + '.log')
+& .\.venv\Scripts\python.exe -B rock_gradation.py '<photo>' --roi '<roi>' --overlay-format png --out $outDir > $runLog 2>&1
+$runExit = $LASTEXITCODE
+if ($runExit -ne 0) {
+    Get-Content -LiteralPath $runLog -Tail 25
+    Write-Output "Failed (exit $runExit). Log: $runLog"
+    exit $runExit
+}
+$resultPath = Join-Path $outDir '<MMDDYYYY>_result.json'
+$result = Get-Content -LiteralPath $resultPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$result | Select-Object schema_version,image,mm_per_px,scale_method,fragments,delineated_pct,d_values,top_size_mm,Cu,rosin_rammler,split,oversize_blocks,fines_requested,fines_correction,warnings,depth_model | ConvertTo-Json -Depth 6 -Compress
+Write-Output "Outputs: $outDir | Log: $runLog"
 ```
+
+Substitute validated paths/date/ROI in this template. Verbose stdout and stderr stay
+in the log; only the compact result enters model context. On failure return the
+error and stop; troubleshooting is separate work. For batches, extract only the
+result files from this invocation (and combined result if requested), not the whole
+folder. Never reread the log on success unless a warning needs investigation.
 
 `--overlay-format png` is required on this machine: Kaspersky Endpoint Security blocks
 scripts from creating `*.jpg`, and a blocked overlay write aborts the whole report
@@ -98,10 +130,13 @@ Read the generated `_overlay.png` (or `.jpg`) with the Read tool and confirm:
 
 If delineation is visibly wrong, the numbers are wrong. Say so and adjust the ROI or flags
 instead of reporting the figures.
+Make at most one clearly justified correction during a routine run, then stop and
+explain any remaining defect. Use a new output folder unless overwrite was authorized.
 
 ## 6. Report
 
-Take the headline numbers from `_result.json` and give the user a table:
+Use the compact JSON extraction above; do not read the full `_result.json` again.
+Give the user one concise table and output-folder/overlay links:
 
 scale mm/px · fragments · area delineated % · D50 · D80 · top size · Cu · RR xc and n ·
 fines % (<100 mm; the JSON key is `split.bypass`) · crusher % (100-400 mm) ·
@@ -113,3 +148,5 @@ summarizing. Missing fit values are null, not zero. If the report fell back to
 measured values, say so. State that accuracy is unvalidated; the older +/-25-30%
 claim was not supported by validation data. Multiple photos improve sampling but
 do not establish accuracy. Physical measurements are needed for validation.
+Daily split percentages are shares of all material. Keep caveats brief, preserve
+material warnings, and do not repeat the method or add a long narrative.
