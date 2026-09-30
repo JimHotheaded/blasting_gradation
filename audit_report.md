@@ -42,3 +42,21 @@ The following pre-existing modified files were left untouched:
 - `CLAUDE.md`
 
 This report was saved separately at the user's request; no fixes were applied.
+
+## Resolution — 2026-09-30
+
+Findings 1–5 are fixed, with regression tests for each. The suite now has **43 tests**: 30 existing,
+2 added in `test_rock_gradation.py` and 11 in the new `tests/test_monthly_report.py`. Regenerating
+September 2026 reproduces the reviewed English and Thai pages and the summary CSV exactly, because
+none of its days trigger the new paths. A real Edge export succeeded through the new staging step.
+
+| # | Fix |
+|---|---|
+| 1 | `fit_depth_model()` fits **every** reference by least squares on `1/mm_per_px` against the row, which is linear for a ground plane, instead of using only the outer pair. A point that the fit misses by more than `DEPTH_TOLERANCE` (10%) is rejected with the offending row named. The audit's 100 mm/px at row 200 case now fails. Two points are still fitted exactly. `depth_model.max_residual_pct` is recorded in the JSON. |
+| 2 | One eligibility rule, `eligible()`, covers every monthly aggregate. Provisional days no longer shape the monthly median curve or the min/median/max table. They are still drawn individually as dashed lines. |
+| 3 | `print_pdf()` prints to a staged file beside the target, then checks Edge's return code, the file size, and the `%PDF-` header and `%%EOF` trailer before replacing the published PDF. On failure the old PDF is untouched, the failure is printed, and the run exits 1. |
+| 4 | `method_facts()` derives the method wording from each day's recorded metric, weighting, perspective correction, effective fines correction and `fit_min`. Mixed settings are named with their days. The short-axis slab caveat appears only when every day used the short axis, and the chart's fines label says "measured" when no day used the fit. |
+| 5 | `conditional_split()` returns `None` for crusher and breaker when less than 0.05% of material lies above 100 mm. Such a day shows "n/a" and is left out of the breaker and crusher statistics. It still counts towards the below-100 mm figures. |
+
+Not addressed: recommendation 4 (pin a tested dependency set and record the model-weight checksum)
+is still open.

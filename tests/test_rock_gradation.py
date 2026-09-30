@@ -141,6 +141,24 @@ class DepthTests(unittest.TestCase):
         scales = [model(r) for r in rows]
         self.assertEqual(scales, sorted(scales, reverse=True))   # nearer -> fewer mm/px
 
+    def test_inconsistent_extra_point_is_rejected_not_ignored(self):
+        # audit 2026-09-30: this third point used to be silently dropped
+        with self.assertRaises(ValueError) as ctx:
+            g.fit_depth_model([(665, 4.396), (1633, 2.198), (200, 100.0)])
+        self.assertIn("row 200", str(ctx.exception))
+
+    def test_all_consistent_points_shape_the_fit(self):
+        truth = g.fit_depth_model([(665, 4.396), (1633, 2.198)])
+        rows = [700, 900, 1100, 1400, 1633]
+        noisy = [(r, truth(r) * f) for r, f in zip(rows, (1.03, 0.98, 1.02, 0.97, 1.01))]
+        model = g.fit_depth_model(noisy)
+        self.assertEqual(len(model.refs), 5)
+        self.assertLess(max(map(abs, model.residuals)), 0.05)
+        # least squares over every point, so the fit is not just the outer pair
+        outer = g.fit_depth_model([noisy[0], noisy[-1]])
+        self.assertNotAlmostEqual(model.horizon, outer.horizon, places=1)
+        self.assertAlmostEqual(model(1000), truth(1000), delta=truth(1000) * 0.05)
+
     def test_model_rejects_unusable_calibration(self):
         for refs in ([(665, 4.4)],                       # one point
                      [(665, 4.4), (1633, 4.4)],          # no depth information

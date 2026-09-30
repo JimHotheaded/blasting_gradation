@@ -113,30 +113,60 @@ class DepthModel:
     refs: tuple
     lo: float
     hi: float
+    residuals: tuple = ()          # (model - reference) / reference, per point
 
     def __call__(self, row):
         value = self.coeff / max(float(row) - self.horizon, 1e-6)
         return min(max(value, self.lo), self.hi)
 
+    def unclamped(self, row):
+        return self.coeff / max(float(row) - self.horizon, 1e-6)
+
+
+# Largest relative disagreement tolerated between a calibration point and the
+# fitted curve. Pole bands measure to within a few percent, so a point that is
+# 10% off is a mistake (wrong row, wrong photo, camera moved), not noise.
+DEPTH_TOLERANCE = 0.10
+
 
 def fit_depth_model(refs):
-    """Solve coeff/(row - horizon) through (row, mm_per_px) calibration points."""
+    """Fit coeff/(row - horizon) through every (row, mm_per_px) calibration point.
+
+    1/mm_per_px is linear in the row for a ground plane, so all points are used in
+    a least-squares line fit rather than just the outermost two. Points that the
+    fitted curve misses by more than DEPTH_TOLERANCE are rejected instead of being
+    silently outvoted. Two points are fitted exactly.
+    """
     points = sorted({(float(row), float(mmpp)) for row, mmpp in refs})
-    if len(points) < 2:
+    if len({row for row, _ in points}) < 2:
         raise ValueError("need two calibration points at different image rows")
-    (y1, m1), (y2, m2) = points[0], points[-1]
-    if abs(m1 - m2) < 1e-9:
+    scales = [m for _, m in points]
+    if max(scales) - min(scales) < 1e-9:
         raise ValueError("calibration points share the same mm/px, so they carry no depth "
                          "information; they must sit at genuinely different distances")
-    horizon = (m1 * y1 - m2 * y2) / (m1 - m2)
-    if horizon >= y1:
+    rows = np.array([y for y, _ in points])
+    inv = np.array([1.0 / m for m in scales])
+    slope, intercept = np.polyfit(rows, inv, 1)
+    if slope <= 0:
         raise ValueError("the implied horizon falls inside the measured rows; the nearer "
                          "point must have the smaller mm/px - check which row is which")
-    coeff = m1 * (y1 - horizon)
+    coeff, horizon = 1.0 / slope, -intercept / slope
+    if horizon >= rows.min():
+        raise ValueError("the implied horizon falls inside the measured rows; the nearer "
+                         "point must have the smaller mm/px - check which row is which")
     if not math.isfinite(coeff) or coeff <= 0:
         raise ValueError("calibration implies a non-physical scale")
-    scales = [m for _, m in points]
-    return DepthModel(coeff, horizon, tuple(points), min(scales) * 0.2, max(scales) * 5.0)
+    model = DepthModel(coeff, horizon, tuple(points), min(scales) * 0.2, max(scales) * 5.0)
+    model.residuals = tuple((model.unclamped(y) - m) / m for y, m in points)
+    worst = max(range(len(points)), key=lambda i: abs(model.residuals[i]))
+    if abs(model.residuals[worst]) > DEPTH_TOLERANCE:
+        y, m = points[worst]
+        raise ValueError(
+            f"calibration point row {y:g} = {m:g} mm/px disagrees with the other points: the "
+            f"fitted curve gives {model.unclamped(y):.3g} mm/px there "
+            f"({100 * model.residuals[worst]:+.0f}%). Check that every reference comes from the "
+            "same camera position and that each row belongs to its mm/px")
+    return model
 
 
 @dataclass
@@ -922,7 +952,8 @@ def analyse(path: Path, args):
     if depth is not None:
         model = dict(kind="inverse-row", horizon_row=rounded(depth.horizon / k, 1),
                      references=[[rounded(row / k, 1), rounded(ref * k, 4)]
-                                 for row, ref in depth.refs])
+                                 for row, ref in depth.refs],
+                     max_residual_pct=rounded(100 * max(map(abs, depth.residuals)), 2))
     # No automatic "you need perspective correction" warning: the only signal
     # available from one photo is how far fragments sit from the pole row, and
     # row spread is not depth spread. A square-on shot spans many rows at nearly

@@ -83,14 +83,26 @@ def month_text(month, prepared):
     ledee="Segmentation overlays: red 400 mm and over, orange 300-400, green 100-300, blue under 100.",
     h2f="Method and limits",
     scale_all="Scale comes from the red and white pole.",
+    sizing={"minor": "sized by the short axis of\ntheir best-fit ellipse",
+            "mean": "sized by the mean of their best-fit ellipse axes",
+            "ecd": "sized by their equivalent circle diameter"},
+    sizing_mixed="sized by a method that differed between days ({detail})",
+    weighting={"area": "weighted by visible area", "volume": "weighted by estimated block volume"},
+    weighting_mixed="weighted differently between days ({detail})",
+    surface_none="Only the surface is visible, and it is coarser than the pile's interior. Rock nearer the camera than the pole\nreads too large; none of these photos had a perspective calibration.",
+    surface_some="Only the surface is visible, and it is coarser than the pile's interior. Rock nearer the camera than the pole\nreads too large unless corrected; a perspective correction was applied on {days} only.",
+    slab_minor="Size is measured on the short axis. A long flat slab can count as crusher feed even when it is over 400 mm long.",
+    fallback=" On {days} the Rosin-Rammler fit was unavailable, so measured values are used below 100 mm.",
+    fitmin_note=" The fines threshold was {v} mm on {days}.",
+    fines_measured="fines &lt;100 mm (measured)",
     scale_except="Scale comes from the red and white pole, except on {days}, where it\ncomes from a line drawn on one block and assumed to be {cm} cm.",
     and_="and",
     method=[
-        "Each day is one photo of the muckpile surface. Blocks are outlined by FastSAM, sized by the short axis of\ntheir best-fit ellipse, and weighted by visible area. {scale}",
+        "Each day is one photo of the muckpile surface. Blocks are outlined by FastSAM, {sizing}, and {weighting}. {scale}",
         "Days are not pooled into a single monthly gradation: they are different piles, photographed from different\ndistances with different areas. Monthly figures are medians of the daily results.",
-        "Only the surface is visible, and it is coarser than the pile's interior. Rock nearer the camera than the pole\nreads too large; none of these photos had a perspective calibration.",
+        "{surface}",
         "Crusher and breaker shares are of the rock above the 100 mm cut point; material below it is reported separately, as a share of all material.",
-        "Size is measured on the short axis. A long flat slab can count as crusher feed even when it is over 400 mm long.",
+        "{slab}",
         "Accuracy is unvalidated. These figures have not been compared against physical sieving or measurement of\nthe same material, and should be treated as indicative."],
     ca_title="Breaker share by production day",
     cc_title="Cumulative percent passing by size, one curve per day",
@@ -99,8 +111,9 @@ def month_text(month, prepared):
     tip_blocks="{n} oversize blocks", tip_range="plausible range {r}", tip_curve="{s} mm passing",
     scale_pole="pole", scale_line="drawn line, assumed {cm:g} cm", whole="whole frame",
     alt="Segmentation overlay for {d}",
-    facts="<span class=\"strong\">{b:.1f}%</span> breaker &middot; D50 {d50:.0f} mm &middot;\n{n} fragments &middot; {mmpp:.2f} mm/px ({scale}) &middot; ROI {roi}",
+    facts="<span class=\"strong\">{b}</span> breaker &middot; D50 {d50:.0f} mm &middot;\n{n} fragments &middot; {mmpp:.2f} mm/px ({scale}) &middot; ROI {roi}",
     conf={"good": "Good", "fair": "Fair", "low": "Low", "provisional": "Provisional"},
+    na="n/a", na_why="no rock above 100 mm, so crusher and breaker shares are undefined",
 ),
 "th": dict(
     lang="th",
@@ -142,14 +155,26 @@ def month_text(month, prepared):
     ledee="ภาพการแบ่งส่วน: สีแดง 400 มม. ขึ้นไป สีส้ม 300-400 สีเขียว 100-300 และสีน้ำเงินต่ำกว่า 100",
     h2f="วิธีการและข้อจำกัด",
     scale_all="มาตราส่วนได้จากไม้สเกลสีแดง-ขาว",
+    sizing={"minor": "วัดขนาดจากแกนสั้นของวงรีที่เข้ากันที่สุด",
+            "mean": "วัดขนาดจากค่าเฉลี่ยของแกนวงรีที่เข้ากันที่สุด",
+            "ecd": "วัดขนาดจากเส้นผ่านศูนย์กลางวงกลมที่มีพื้นที่เท่ากัน"},
+    sizing_mixed="วัดขนาดด้วยวิธีที่ต่างกันในแต่ละวัน ({detail})",
+    weighting={"area": "ถ่วงน้ำหนักด้วยพื้นที่ที่มองเห็น", "volume": "ถ่วงน้ำหนักด้วยปริมาตรก้อนโดยประมาณ"},
+    weighting_mixed="ถ่วงน้ำหนักต่างกันในแต่ละวัน ({detail})",
+    surface_none="มองเห็นได้เฉพาะผิวกอง ซึ่งหยาบกว่าเนื้อในของกอง หินที่อยู่ใกล้กล้องกว่าไม้สเกลจะวัดได้ใหญ่เกินจริง และไม่มีภาพใดที่ได้รับการสอบเทียบมุมมอง",
+    surface_some="มองเห็นได้เฉพาะผิวกอง ซึ่งหยาบกว่าเนื้อในของกอง หินที่อยู่ใกล้กล้องกว่าไม้สเกลจะวัดได้ใหญ่เกินจริงหากไม่ได้แก้ไข โดยมีการแก้ไขมุมมองเฉพาะวันที่ {days}",
+    slab_minor="ขนาดวัดตามแกนสั้น แผ่นหินแบนยาวอาจถูกนับเป็นวัสดุเข้าเครื่องโม่ แม้จะยาวเกิน 400 มม.",
+    fallback=" วันที่ {days} ไม่สามารถใช้แบบจำลอง Rosin-Rammler ได้ จึงใช้ค่าที่วัดจริงสำหรับขนาดต่ำกว่า 100 มม.",
+    fitmin_note=" เกณฑ์วัสดุละเอียดเป็น {v} มม. ในวันที่ {days}",
+    fines_measured="วัสดุละเอียด &lt;100 มม. (วัดจริง)",
     scale_except="มาตราส่วนได้จากไม้สเกลสีแดง-ขาว ยกเว้นวันที่ {days}ที่ได้จากเส้นที่วาดบนหินหนึ่งก้อนโดยสมมติว่ายาว {cm} ซม.",
     and_="และ",
     method=[
-        "แต่ละวันใช้ภาพถ่ายผิวกองหินหนึ่งภาพ ขอบเขตของก้อนหินตรวจจับด้วย FastSAM วัดขนาดจากแกนสั้นของวงรีที่เข้ากันที่สุด และถ่วงน้ำหนักด้วยพื้นที่ที่มองเห็น {scale}",
+        "แต่ละวันใช้ภาพถ่ายผิวกองหินหนึ่งภาพ ขอบเขตของก้อนหินตรวจจับด้วย FastSAM {sizing} และ{weighting} {scale}",
         "ไม่ได้รวมข้อมูลทุกวันเป็นเส้นการกระจายขนาดเดียวของเดือน เพราะเป็นกองหินต่างกัน ถ่ายจากระยะและพื้นที่ที่ต่างกัน ตัวเลขประจำเดือนจึงเป็นค่ามัธยฐานของผลรายวัน",
-        "มองเห็นได้เฉพาะผิวกอง ซึ่งหยาบกว่าเนื้อในของกอง หินที่อยู่ใกล้กล้องกว่าไม้สเกลจะวัดได้ใหญ่เกินจริง และไม่มีภาพใดที่ได้รับการสอบเทียบมุมมอง",
+        "{surface}",
         "สัดส่วนเครื่องโม่และเบรกเกอร์คิดจากหินที่ใหญ่กว่าจุดตัด 100 มม. ส่วนวัสดุที่เล็กกว่ารายงานแยกเป็นสัดส่วนของวัสดุทั้งหมด",
-        "ขนาดวัดตามแกนสั้น แผ่นหินแบนยาวอาจถูกนับเป็นวัสดุเข้าเครื่องโม่ แม้จะยาวเกิน 400 มม.",
+        "{slab}",
         "ยังไม่ได้ตรวจสอบความแม่นยำ ตัวเลขเหล่านี้ยังไม่ได้เปรียบเทียบกับการร่อนตะแกรงหรือการวัดจริงของวัสดุเดียวกัน จึงควรใช้เป็นค่าบ่งชี้เท่านั้น"],
     ca_title="สัดส่วนเบรกเกอร์ตามวันการผลิต",
     cc_title="เปอร์เซ็นต์ผ่านสะสมตามขนาด แยกเส้นตามวัน",
@@ -159,8 +184,9 @@ def month_text(month, prepared):
     tip_blocks="หินเกินขนาด {n} ก้อน", tip_range="ช่วงที่เป็นไปได้ {r}", tip_curve="ผ่านตะแกรง {s} มม.",
     scale_pole="ไม้สเกล", scale_line="เส้นที่วาด สมมติ {cm:g} ซม.", whole="ทั้งภาพ",
     alt="ภาพการแบ่งส่วนของวันที่ {d}",
-    facts="เบรกเกอร์ <span class=\"strong\">{b:.1f}%</span> &middot; D50 {d50:.0f} มม. &middot;\n{n} ก้อน &middot; {mmpp:.2f} mm/px <span style=\"white-space:nowrap\">({scale})</span> &middot; ROI {roi}",
+    facts="เบรกเกอร์ <span class=\"strong\">{b}</span> &middot; D50 {d50:.0f} มม. &middot;\n{n} ก้อน &middot; {mmpp:.2f} mm/px <span style=\"white-space:nowrap\">({scale})</span> &middot; ROI {roi}",
     conf={"good": "ดี", "fair": "พอใช้", "low": "ต่ำ", "provisional": "เบื้องต้น"},
+    na="ไม่มีข้อมูล", na_why="ไม่มีหินที่ใหญ่กว่า 100 มม. จึงคำนวณสัดส่วนเครื่องโม่และเบรกเกอร์ไม่ได้",
 ),
 }
 
@@ -182,12 +208,33 @@ def load_day(root, day):
         small = cv2.resize(ov, None, fx=k, fy=k, interpolation=cv2.INTER_AREA)
         ok, buf = cv2.imencode(".webp", small, [cv2.IMWRITE_WEBP_QUALITY, 72])
         thumb = base64.b64encode(buf.tobytes()).decode()
-    pas = {q["size_mm"]: q["report"] for q in R["passing"]}
-    above = max(100 - pas[CUT], 1e-9)             # rock above the cut point
-    R["split"] = dict(bypass=round(pas[CUT], 2),                                  # % of all
-                      crusher=round(100 * (pas[BREAKER] - pas[CUT]) / above, 2),  # % of >=CUT
-                      breaker=round(100 * (100 - pas[BREAKER]) / above, 2))
+    R["split"] = conditional_split(R["passing"])
     return R, thumb
+
+
+# Below this share of rock above the cut point (in % of all material), crusher and
+# breaker percentages of that rock have no meaningful denominator.
+MIN_ABOVE_CUT = 0.05
+
+
+def eligible(days):
+    """Days that count towards monthly figures: everything but provisional ones."""
+    return [d for d in days if d["meta"]["conf"] != "provisional"]
+
+
+def conditional_split(passing):
+    """<CUT as % of all material; crusher and breaker as % of rock >= CUT.
+
+    When essentially nothing lies above the cut point the conditional shares are
+    undefined, so they are None (reported as unavailable), not 0%.
+    """
+    pas = {q["size_mm"]: q["report"] for q in passing}
+    above = 100 - pas[CUT]
+    if above < MIN_ABOVE_CUT:
+        return dict(bypass=round(pas[CUT], 2), crusher=None, breaker=None)
+    return dict(bypass=round(pas[CUT], 2),
+                crusher=round(100 * (pas[BREAKER] - pas[CUT]) / above, 2),
+                breaker=round(100 * (100 - pas[BREAKER]) / above, 2))
 
 
 def init_notes(root, path):
@@ -209,8 +256,8 @@ def init_notes(root, path):
 def chart_breaker(days, L):
     W, H, L_, R_, T, B = 720, 300, 52, 20, 24, 58
     pw, ph = W - L_ - R_, H - T - B
-    top = max([d["R"]["split"]["breaker"] for d in days] +
-              [d["meta"]["range"][1] for d in days if "range" in d["meta"]])
+    top = max([d["R"]["split"]["breaker"] for d in days if d["R"]["split"]["breaker"] is not None] +
+              [d["meta"]["range"][1] for d in days if "range" in d["meta"]] + [0])
     ymax = max(40.0, math.ceil(top / 10) * 10)
     y = lambda v: T + ph * (1 - v / ymax)
     band = pw / len(days)
@@ -228,14 +275,20 @@ def chart_breaker(days, L):
         if "range" in m:
             lo, hi = m["range"]
             s.append(f'<line class="range" x1="{cx:.1f}" x2="{cx:.1f}" y1="{y(lo):.1f}" y2="{y(hi):.1f}"/>')
-        cls = "dot hollow" if m["conf"] == "provisional" else "dot"
-        s.append(f'<circle class="{cls}" cx="{cx:.1f}" cy="{y(b):.1f}" r="5"/>')
         rng = f"{m['range'][0]:.1f}-{m['range'][1]:.1f}%" if "range" in m else ""
-        tip = json.dumps(dict(title=d["long"], value=f"{b:.1f}%",
-                              lines=[L["tip_blocks"].format(n=d['R']['oversize_blocks']),
-                                     *([L["tip_range"].format(r=rng)] if rng else []),
-                                     *([d["flag"]] if d.get("flag") else [])]))
-        s.append(f'<circle class="hit" cx="{cx:.1f}" cy="{y(b):.1f}" r="16" tabindex="0" '
+        if b is None:     # no rock above the cut point: nothing to plot, say so
+            s.append(f'<text class="note" x="{cx:.1f}" y="{y(0)-8:.1f}" text-anchor="middle">{L["na"]}</text>')
+            tip = json.dumps(dict(title=d["long"], value=L["na"], lines=[L["na_why"]]))
+            yb = y(0) - 12
+        else:
+            cls = "dot hollow" if m["conf"] == "provisional" else "dot"
+            s.append(f'<circle class="{cls}" cx="{cx:.1f}" cy="{y(b):.1f}" r="5"/>')
+            tip = json.dumps(dict(title=d["long"], value=f"{b:.1f}%",
+                                  lines=[L["tip_blocks"].format(n=d['R']['oversize_blocks']),
+                                         *([L["tip_range"].format(r=rng)] if rng else []),
+                                         *([d["flag"]] if d.get("flag") else [])]))
+            yb = y(b)
+        s.append(f'<circle class="hit" cx="{cx:.1f}" cy="{yb:.1f}" r="16" tabindex="0" '
                  f"data-tip='{esc(tip, quote=True)}'/>")
         if i % every == 0:
             s.append(f'<text class="tick" x="{cx:.1f}" y="{H-B+20}" text-anchor="middle">{esc(d["label"])}</text>')
@@ -245,7 +298,7 @@ def chart_breaker(days, L):
     return "".join(s)
 
 
-def chart_curves(days, L, categorical):
+def chart_curves(days, L, categorical, fines_label):
     W, H, L_, R_, T, B = 720, 380, 52, 20, 20, 44
     pw, ph = W - L_ - R_, H - T - B
     lx0, lx1 = math.log10(10), math.log10(1200)
@@ -254,7 +307,7 @@ def chart_curves(days, L, categorical):
     s = [f'<svg class="chart" id="curves" viewBox="0 0 {W} {H}" role="img" aria-labelledby="cc-t">'
          f'<title id="cc-t">{L["cc_title"]}</title>'
          f'<rect class="fines" x="{x(10):.1f}" y="{T}" width="{x(100)-x(10):.1f}" height="{ph}"/>'
-         f'<text class="note" x="{x(10)+6:.1f}" y="{T+14}">{L["fines"]}</text>']
+         f'<text class="note" x="{x(10)+6:.1f}" y="{T+14}">{fines_label}</text>']
     for v in range(0, 101, 20):
         cls = "axis" if v == 0 else "grid"
         s.append(f'<line class="{cls}" x1="{L_}" x2="{W-R_}" y1="{y(v):.1f}" y2="{y(v):.1f}"/>'
@@ -273,7 +326,9 @@ def chart_curves(days, L, categorical):
         width = "" if categorical else ' stroke-width="1.2"'
         s.append(f'<polyline class="line" style="{style}"{width}{dash} points="{pts(vals, sizes)}"/>')
     if not categorical:
-        med = [statistics.median(d["R"]["passing"][k]["report"] for d in days)
+        # same eligibility as every other monthly figure: provisional days are drawn
+        # individually (dashed) but never shape the monthly median
+        med = [statistics.median(d["R"]["passing"][k]["report"] for d in eligible(days))
                for k in range(len(sizes))]
         s.append(f'<polyline class="line" style="stroke:var(--accent)" stroke-width="3" '
                  f'points="{pts(med, sizes)}"/>')
@@ -425,6 +480,46 @@ hitC.addEventListener("keydown", e => {
 """
 
 
+def method_facts(days, L):
+    """Describe the method from what each daily report actually recorded.
+
+    Uniform settings read as one plain sentence; anything that differed between
+    days, or departs from the usual defaults, is named with the days it applies to,
+    so the method section can never claim a setting that was not used.
+    """
+    name = lambda ds: join_days([L["day_name"](d["day"]) for d in ds], L["and_"])
+
+    def describe(key, get, texts, mixed):
+        groups = {}
+        for d in days:
+            groups.setdefault(get(d["R"]), []).append(d)
+        if len(groups) == 1:
+            v = next(iter(groups))
+            return texts.get(v, str(v))
+        detail = "; ".join(f"{texts.get(v, v)}: {name(ds)}" for v, ds in groups.items())
+        return L[mixed].format(detail=detail)
+
+    metric = lambda R: (R.get("settings") or {}).get("metric", "minor")
+    weight = lambda R: R.get("weighting") or (R.get("settings") or {}).get("weight", "area")
+    corrected = [d for d in days if d["R"].get("depth_model")
+                 or (d["R"].get("perspective") not in (None, 1, 1.0))]
+    fallback = [d for d in days if d["R"].get("fines_correction") not in (None, "rr")]
+    odd_fit = {}
+    for d in days:
+        v = (d["R"].get("settings") or {}).get("fit_min", CUT)
+        if v != CUT:
+            odd_fit.setdefault(v, []).append(d)
+    return dict(
+        sizing=describe("metric", metric, L["sizing"], "sizing_mixed"),
+        weighting=describe("weight", weight, L["weighting"], "weighting_mixed"),
+        surface=(L["surface_some"].format(days=name(corrected)) if corrected else L["surface_none"]),
+        slab=L["slab_minor"] if all(metric(d["R"]) == "minor" for d in days) else "",
+        fines_note=((L["fallback"].format(days=name(fallback)) if fallback else "") +
+                    "".join(L["fitmin_note"].format(v=f"{v:g}", days=name(ds)) for v, ds in odd_fit.items())),
+        fines_label=L["fines_measured"] if len(fallback) == len(days) else L["fines"],
+    )
+
+
 def join_days(names, and_):
     return names[0] if len(names) == 1 else ", ".join(names[:-1]) + f" {and_} " + names[-1]
 
@@ -442,13 +537,19 @@ def build(lang, month, root, notes, raw, prepared):
         days.append(dict(day=day, label=L["short"](day), long=L["long"](day), R=R, meta=meta,
                          thumb=thumb, flag=(e.get("flag") or {}).get(lang)))
 
-    measured = [d for d in days if d["meta"]["conf"] != "provisional"]
+    measured = eligible(days)
     if not measured:
         sys.exit("Every day is provisional; there is nothing to summarise.")
-    brk = [d["R"]["split"]["breaker"] for d in measured]
+    # conditional shares are undefined on a day with no rock above the cut point
+    with_rock = [d for d in measured if d["R"]["split"]["breaker"] is not None]
+    if not with_rock:
+        sys.exit("No measured day has rock above the 100 mm cut point; crusher and breaker "
+                 "shares are undefined for the whole month.")
+    brk = [d["R"]["split"]["breaker"] for d in with_rock]
     fines = [d["R"]["split"]["bypass"] for d in measured]
-    st = dict(m=len(measured), medb=statistics.median(brk), bmin=min(brk), bmax=max(brk),
-              medc=statistics.median(d["R"]["split"]["crusher"] for d in measured),
+    st = dict(m=len(with_rock), mf=len(measured),
+              medb=statistics.median(brk), bmin=min(brk), bmax=max(brk),
+              medc=statistics.median(d["R"]["split"]["crusher"] for d in with_rock),
               medf=statistics.median(fines), meanf=statistics.mean(fines),
               fmin=min(fines), fmax=max(fines))
     med_d50 = statistics.median(d["R"]["d_values"]["D50"] for d in measured)
@@ -456,14 +557,15 @@ def build(lang, month, root, notes, raw, prepared):
 
     categorical = len(days) <= len(SERIES)
     svg_a = chart_breaker(days, L)
-    svg_c, geo = chart_curves(days, L, categorical)
+    mf = method_facts(days, L)
+    svg_c, geo = chart_curves(days, L, categorical, mf["fines_label"])
     sizes = [p["size_mm"] for p in days[0]["R"]["passing"]]
     if categorical:
         series = [dict(name=d["label"] + (PROV if d["meta"]["conf"] == "provisional" else ""),
                        var=SERIES[i], values=[p["report"] for p in d["R"]["passing"]])
                   for i, d in enumerate(days)]
     else:
-        cols = [[d["R"]["passing"][k]["report"] for d in days] for k in range(len(sizes))]
+        cols = [[d["R"]["passing"][k]["report"] for d in measured] for k in range(len(sizes))]
         series = [dict(name=L["tmin"], var="axis", values=[min(c) for c in cols]),
                   dict(name=L["tmed"], var="accent", values=[statistics.median(c) for c in cols]),
                   dict(name=L["tmax"], var="axis", values=[max(c) for c in cols])]
@@ -485,6 +587,7 @@ def build(lang, month, root, notes, raw, prepared):
         return (f'<span class="conf"><span class="badge {cls}" aria-hidden="true">{icon}</span>'
                 f'{L["conf"][c]}</span>')
     fmt = lambda v, n=0: "-" if v is None else f"{v:.{n}f}"
+    pct = lambda v: L["na"] if v is None else f"{v:.1f}%"
 
     rows = []
     for d in days:
@@ -493,7 +596,7 @@ def build(lang, month, root, notes, raw, prepared):
 <td>{R['mm_per_px']:.2f}</td><td>{R['fragments']}</td><td>{R['delineated_pct']:.0f}%</td>
 <td>{fmt(R['d_values']['D10'])}</td><td>{fmt(R['d_values']['D50'])}</td><td>{fmt(R['d_values']['D80'])}</td>
 <td>{fmt(R['top_size_mm'])}</td><td>{R['Cu']:.1f}</td><td>{R['split']['bypass']:.1f}%</td>
-<td>{R['split']['crusher']:.1f}%</td><td class="strong">{R['split']['breaker']:.1f}%</td>
+<td>{pct(R['split']['crusher'])}</td><td class="strong">{pct(R['split']['breaker'])}</td>
 <td>{R['oversize_blocks']}</td></tr>""")
 
     curve_rows = []
@@ -513,7 +616,7 @@ def build(lang, month, root, notes, raw, prepared):
         R, m = d["R"], d["meta"]
         notes_html = "".join(f"<li>{esc(n)}</li>" for n in m["notes"])
         roi = ", ".join(f"{v:g}" for v in R["settings"]["roi"]) if R["settings"]["roi"] else L["whole"]
-        facts = L["facts"].format(b=R["split"]["breaker"], d50=R["d_values"]["D50"], n=R["fragments"],
+        facts = L["facts"].format(b=pct(R["split"]["breaker"]), d50=R["d_values"]["D50"], n=R["fragments"],
                                   mmpp=R["mm_per_px"], scale=esc(scale_label(R)), roi=esc(roi))
         img = (f'<img src="data:image/webp;base64,{d["thumb"]}"\nalt="{esc(L["alt"].format(d=d["label"]))}" '
                f'loading="lazy">') if d["thumb"] else ""
@@ -529,7 +632,8 @@ def build(lang, month, root, notes, raw, prepared):
                                          cm=" / ".join(f"{c:g}" for c in cms))
     else:
         scale = L["scale_all"]
-    method = "".join(f"<li>{m.format(scale=scale) if '{scale}' in m else m}</li>\n" for m in L["method"])
+    method = "".join(f"<li>{m.format(scale=scale, **mf)}</li>\n" for m in L["method"]
+                     if m != "{slab}" or mf["slab"])
     prov_days = [d for d in days if d["meta"]["conf"] == "provisional"]
     why = "pole" if prov_days and all(d["R"]["scale_method"].startswith("manual") for d in prov_days) else "other"
     prov = ([L["prov_bullet"][why][len(prov_days) > 1].format(
@@ -556,7 +660,7 @@ def build(lang, month, root, notes, raw, prepared):
  <div class="tile"><div class="label">{L['t2']}</div><div class="value">{st['bmin']:.0f}-{st['bmax']:.0f}%</div>
   <div class="hint">{L['t2h']}</div></div>
  <div class="tile"><div class="label">{L['t5']}</div><div class="value">{st['meanf']:.1f}%</div>
-  <div class="hint">{L['t5h'].format(m=st['m'])}</div></div>
+  <div class="hint">{L['t5h'].format(m=st['mf'])}</div></div>
  <div class="tile"><div class="label">{L['t3']}</div><div class="value">{med_d50:.0f} {L['mm']}</div>
   <div class="hint">{L['t3h']}</div></div>
  <div class="tile"><div class="label">{L['t4']}</div><div class="value">{len(days)}</div>
@@ -568,7 +672,7 @@ def build(lang, month, root, notes, raw, prepared):
 <div class="panel" id="panel-a">{svg_a}<div class="tip" id="tip-a" role="status"></div></div>
 
 <h2 class="pb">{L['h2c']}</h2>
-<p class="lede">{L['ledec']}<span class="screen-only">{L['hover']}</span></p>
+<p class="lede">{L['ledec']}{mf['fines_note']}<span class="screen-only">{L['hover']}</span></p>
 <div class="panel" id="panel-c"><div class="legend">{legend}</div>{svg_c}<div class="tip" id="tip-c" role="status"></div>
 <details><summary>{L['summary']}</summary><div class="scroll"><table>
 <thead><tr><th scope="col">{L['size_head']}</th>{curve_head}</tr></thead><tbody>{''.join(curve_rows)}</tbody></table></div></details></div>
@@ -613,19 +717,37 @@ def write_csv(path, days, lang_conf):
 
 
 def print_pdf(html_text, lang, pdf_path):
+    """Print to a fresh temporary PDF, verify it, then replace the published file.
+
+    Returns None on success or a reason string. On failure the previously published
+    PDF, if any, is left untouched, so a stale file can never pass for a new one.
+    """
     edge = next((p for p in EDGE_PATHS if Path(p).exists()), None)
     if edge is None:
-        print(f"  PDF skipped: Microsoft Edge not found; open {pdf_path.with_suffix('.html')} and print to PDF")
-        return False
+        return f"Microsoft Edge not found; open {pdf_path.with_suffix('.html').name} and print to PDF"
     printable = (html_text.replace(f'<html lang="{lang}">', f'<html lang="{lang}" data-theme="light">')
                           .replace("<details>", "<details open>"))
-    with tempfile.TemporaryDirectory() as tmp:
-        src = Path(tmp) / "print.html"
+    with tempfile.TemporaryDirectory(dir=pdf_path.parent, prefix=".pdf-") as tmp:
+        src, staged = Path(tmp) / "print.html", Path(tmp) / pdf_path.name
         src.write_text(printable, encoding="utf-8")
-        subprocess.run([edge, "--headless=new", "--disable-gpu", "--no-pdf-header-footer",
-                        f"--print-to-pdf={pdf_path.resolve()}", src.as_uri()],
-                       capture_output=True, timeout=180)
-    return pdf_path.exists()
+        try:
+            done = subprocess.run([edge, "--headless=new", "--disable-gpu", "--no-pdf-header-footer",
+                                   f"--print-to-pdf={staged.resolve()}", src.as_uri()],
+                                  capture_output=True, timeout=180)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return f"Edge did not finish: {exc}"
+        if done.returncode != 0:
+            return f"Edge exited with code {done.returncode}"
+        if not staged.is_file() or staged.stat().st_size < 1024:
+            return "Edge reported success but wrote no usable PDF"
+        with open(staged, "rb") as fh:
+            head = fh.read(5)
+            fh.seek(-2048, 2) if staged.stat().st_size > 2048 else fh.seek(0)
+            tail = fh.read()
+        if head != b"%PDF-" or b"%%EOF" not in tail:
+            return "Edge wrote a file that is not a complete PDF"
+        staged.replace(pdf_path)
+    return None
 
 
 def main(argv=None):
@@ -661,6 +783,7 @@ def main(argv=None):
         sys.exit(f"notes.json has no reviewed entry (conf = {' | '.join(CONFS)}) for: {', '.join(missing)}")
 
     raw = {d: load_day(root, d) for d in days}
+    failures = []
     for lang in args.lang:
         suffix = "" if lang == "en" else f"_{lang}"
         page, built, st = build(lang, month, root, notes, raw, args.prepared)
@@ -669,12 +792,21 @@ def main(argv=None):
         msg = f"[{lang}] {html_path}"
         if not args.no_pdf:
             pdf = out / f"{month}_report{suffix}.pdf"
-            msg += f" + {pdf.name}" if print_pdf(page, lang, pdf) else " (PDF failed)"
+            why = print_pdf(page, lang, pdf)
+            if why is None:
+                msg += f" + {pdf.name}"
+            else:
+                kept = " (previous PDF left in place, now out of date)" if pdf.exists() else ""
+                msg += f" -- PDF FAILED: {why}{kept}"
+                failures.append(pdf.name)
         print(msg)
         if lang == "en" or "en" not in args.lang:
             write_csv(out / f"{month}_summary.csv", built, month_text(month, args.prepared)["en"]["conf"])
-    print(f"{month}: {len(days)} days, {st['m']} measured | median breaker {st['medb']:.1f}% "
+    print(f"{month}: {len(days)} days, {st['mf']} measured | median breaker {st['medb']:.1f}% "
           f"({st['bmin']:.0f}-{st['bmax']:.0f}%) of rock >=100 mm | mean <100 mm {st['meanf']:.1f}%")
+    if failures:
+        print(f"ERROR: PDF export failed for {', '.join(failures)}", file=sys.stderr)
+        return 1
     return 0
 
 
