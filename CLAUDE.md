@@ -77,4 +77,6 @@ Accuracy is unvalidated: the old +/-25-30% statement was not evidence-backed.
 Surface bias, perspective, fines estimation, and segmentation remain limitations.
 Multiple photographs improve sampling but cannot establish accuracy by themselves.
 Keep site photos, model weights, and generated reports out of Git. Photos live in
-`stockpile_picture/<YYYY-MM>/`, reports in `output/<YYYY-MM>/<YYYY-MM-DD>/`.
+`stockpile_picture/<YYYY-MM>/`, daily reports in `output/<YYYY-MM>/<YYYY-MM-DD>/`, and
+the month's summary (HTML, PDF, CSV) in `output/<YYYY-MM>/report/`. Only
+`YYYY-MM-DD` folders are production days; anything reading a month must skip `report/`.
