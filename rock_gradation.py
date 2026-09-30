@@ -577,7 +577,7 @@ def report(frags, meta, args):
     split = dict(bypass=use(bp), crusher=use(bt) - use(bp), breaker=100 - use(bt))
     R["split"] = {k: round(v, 2) for k, v in split.items()}
     print("\n  SUMMARY SPLIT")
-    print(f"    Bypass   (<{bp:.0f} mm)      : {split['bypass']:5.1f} %")
+    print(f"    Fines    (<{bp:.0f} mm)     : {split['bypass']:5.1f} %")
     print(f"    Crusher  ({bp:.0f}-{bt:.0f} mm)    : {split['crusher']:5.1f} %")
     print(f"    BREAKER  (>={bt:.0f} mm)    : {split['breaker']:5.1f} %")
     n_over = sum(f.size_mm >= bt for f in frags)
@@ -948,7 +948,9 @@ def main(argv=None):
                     help="analyse box x,y,w,h in pixels, or as fractions "
                          "e.g. 0,0.2,1,0.8 = skip the top 20%% of the photo")
     ap.add_argument("--breaker", type=float, default=400, help="oversize limit, mm (400)")
-    ap.add_argument("--bypass", type=float, default=10, help="crusher bypass size, mm (10)")
+    ap.add_argument("--bypass", type=float, default=100,
+                    help="fines cut-off: rock below this bypasses the crusher, mm (100). "
+                         "The crusher takes --bypass to --breaker")
     ap.add_argument("--min-size", type=float, default=30, help="smallest fragment kept, mm (30)")
     ap.add_argument("--fit-min", type=float, default=100,
                     help="treat rock below this size as fines and take it from the "

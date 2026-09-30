@@ -356,7 +356,7 @@ class CliAndExportTests(unittest.TestCase):
             image = root / "one.png"
             image.touch()
             def analyse(path, args):
-                seen["fit_min"] = args.fit_min
+                seen["fit_min"], seen["bypass"] = args.fit_min, args.bypass
                 fs = fragments([40, 60, 100, 200, 320, 400, 600, 800, 900, 1000])
                 for f in fs:
                     f.source_image = str(path)
@@ -366,9 +366,15 @@ class CliAndExportTests(unittest.TestCase):
                     contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(g.main([str(image), "--out", str(root / "out")]), 0)
             data = json.loads((root / "out/one_result.json").read_text(encoding="utf-8"))
-        # fines now means "below 100 mm", matching the overlay's blue class
+        # fines means "below 100 mm" everywhere: the overlay's blue class, the RR
+        # fines threshold, and the cut-off below which rock bypasses the crusher,
+        # so the crusher takes 100-400 mm
         self.assertEqual(seen["fit_min"], 100)
         self.assertEqual(data["settings"]["fit_min"], 100)
+        self.assertEqual(seen["bypass"], 100)
+        self.assertEqual(data["settings"]["bypass"], 100)
+        self.assertAlmostEqual(data["split"]["bypass"] + data["split"]["crusher"]
+                               + data["split"]["breaker"], 100, places=1)
 
     def test_existing_output_rejected_before_model_load(self):
         with tempfile.TemporaryDirectory() as folder:

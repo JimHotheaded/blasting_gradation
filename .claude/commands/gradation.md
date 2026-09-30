@@ -81,7 +81,8 @@ Each photo yields five checked files. Existing outputs require a new directory o
 explicit `--overwrite`. Pass explicit image paths for combined runs. A batch uses
 one ROI setting for all photos; process separately if their ROIs differ.
 
-Flags worth knowing: `--breaker` (oversize limit, default 400 mm), `--bypass` (default 10 mm),
+Flags worth knowing: `--breaker` (oversize limit, default 400 mm), `--bypass` (fines cut-off,
+default 100 mm, so the crusher takes 100-400 mm),
 `--segment-length` (one pole segment, default 400 mm), `--persp` when the foreground is
 markedly closer than the pole, `--model FastSAM-s.pt` for a faster pass. For several photos
 of the *same* muckpile, add `--combine` to pool them into one gradation.
@@ -103,7 +104,8 @@ instead of reporting the figures.
 Take the headline numbers from `_result.json` and give the user a table:
 
 scale mm/px · fragments · area delineated % · D50 · D80 · top size · Cu · RR xc and n ·
-bypass % · crusher % · **breaker % and the oversize block count**.
+fines % (<100 mm; the JSON key is `split.bypass`) · crusher % (100-400 mm) ·
+**breaker % (>=400 mm) and the oversize block count**.
 
 With several photos, compare them in one table. Check `schema_version`,
 `rosin_rammler.status`, `warnings`, and requested/effective fines correction before

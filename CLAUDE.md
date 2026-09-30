@@ -65,6 +65,12 @@ percentages, splits, D-values, and plots use one distribution definition.
   overlay's blue class. It sets both the fit's lower bound and the chart's
   shaded region, so moving it changes D-values at the fine end (D10, D30)
   while leaving the coarse end and the breaker split essentially untouched.
+- Plant split: **fines <100 mm, crusher 100-400 mm, breaker >=400 mm**.
+  `--bypass` (default 100) is the fines cut-off and `--breaker` (400) the
+  oversize limit; the crusher takes what lies between. The JSON key stays
+  `split.bypass` for compatibility, but it is presented to users as "fines".
+  100 mm is deliberately the same edge as `--fit-min` and the overlay's blue
+  class, so "fines" means one thing throughout.
 - Output schema version 2 changes fragment CSV identifiers, unavailable fit
   representation, quantile semantics, and dynamic retained bands.
 

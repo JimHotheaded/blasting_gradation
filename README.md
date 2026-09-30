@@ -2,7 +2,8 @@
 
 Reads a muckpile/stockpile photo with the red-white scale pole, outlines every
 visible block with the FastSAM AI model, and prints the gradation:
-cumulative % passing, % retained per band, bypass / crusher / breaker split,
+cumulative % passing, % retained per band, the fines / crusher / breaker split
+(under 100 mm / 100-400 mm / 400 mm and over),
 D10–D95, Cu and a Rosin-Rammler fit.
 
 ## Setup (once)
@@ -44,7 +45,7 @@ python rock_gradation.py shot12/photo1.jpg shot12/photo2.jpg --roi 0,0.2,1,0.8 -
 | Option | Default | |
 |---|---|---|
 | `--breaker` | 400 | oversize limit to hydraulic breaker, mm |
-| `--bypass` | 10 | size that bypasses the crusher, mm |
+| `--bypass` | 100 | fines cut-off: rock below this bypasses the crusher, which takes `--bypass` to `--breaker` (100-400 mm), mm |
 | `--segment-length` | 400 | one red or white pole segment, mm |
 | `--roi` | whole photo | x,y,w,h in pixels or fractions |
 | `--persp-ref` | off | `ROW,MM_PER_PX` depth calibration from a second photo (see below). Fits the true `1/(row-horizon)` curve. Repeatable |
