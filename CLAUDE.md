@@ -14,6 +14,14 @@ Use the repository virtual environment from the repository root:
 Input/output/model paths are relative to the caller's current directory. There is
 no wrapper script: invoke `rock_gradation.py` directly.
 
+`monthly_report.py` builds the month's summary from the daily reports
+(`/genreport`): `.\.venv\Scripts\python.exe -B monthly_report.py 2026-09`. It
+writes English and Thai HTML and PDF plus a CSV into `output/<YYYY-MM>/report/`,
+printing PDFs with headless Edge. Per-day judgements (confidence, plausible
+range, notes, month highlights) live in `output/<YYYY-MM>/report/notes.json` and
+are written by reviewing each day; the build refuses to run until every day is
+reviewed. Its layout is the approved one: keep changes to it deliberate.
+
 ## Pipeline
 
 `main()` validates arguments and output paths before `analyse()` processes each
