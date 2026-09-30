@@ -8,7 +8,7 @@ Use the repository virtual environment from the repository root:
 
 ```powershell
 .\.venv\Scripts\python.exe -B -m unittest discover -s tests -v
-.\.venv\Scripts\python.exe -B rock_gradation.py stockpile_picture/09182026.jpg --roi 0,0.2,1,0.8 --out output/new-run
+.\.venv\Scripts\python.exe -B rock_gradation.py stockpile_picture/2026-09/09182026.jpg --roi 0,0.2,1,0.8 --out output/2026-09/new-run
 ```
 
 Input/output/model paths are relative to the caller's current directory. There is
@@ -76,4 +76,5 @@ Synthetic tests establish software behavior, not sieve-equivalent accuracy.
 Accuracy is unvalidated: the old +/-25-30% statement was not evidence-backed.
 Surface bias, perspective, fines estimation, and segmentation remain limitations.
 Multiple photographs improve sampling but cannot establish accuracy by themselves.
-Keep site photos, model weights, and generated reports out of Git.
+Keep site photos, model weights, and generated reports out of Git. Photos live in
+`stockpile_picture/<YYYY-MM>/`, reports in `output/<YYYY-MM>/<YYYY-MM-DD>/`.

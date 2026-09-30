@@ -42,10 +42,15 @@ the whole muckpile gave ~35% from 183 fragments instead of 58. Handle the depth 
 
 ## 3. Work out the output folder
 
-Output goes in `output/<YYYY-MM-DD>/` — ISO, so folders sort chronologically.
+Both folders are grouped by month (ISO, so they sort chronologically):
 
-Derive the date from the filename stem when it is `MMDDYYYY` (`09182026` → `2026-09-18`).
-If the stem is not a date, ask the user for the production date rather than inventing one.
+- photos: `stockpile_picture/<YYYY-MM>/<MMDDYYYY>.jpg`
+- reports: `output/<YYYY-MM>/<YYYY-MM-DD>/` — one folder per day inside the month
+
+Derive both from the filename stem when it is `MMDDYYYY` (`09182026` → month `2026-09`,
+day `2026-09-18`). If the stem is not a date, ask the user for the production date rather
+than inventing one. A new photo dropped loose into `stockpile_picture/` should be moved
+into its month folder before running.
 
 ## 4. Run it
 
@@ -54,7 +59,7 @@ source patching. Unicode paths are supported. Do not rename extensions or bypass
 write failures; a failed output write stops the run.
 
 ```powershell
-.\.venv\Scripts\python.exe -B rock_gradation.py <photo> --roi <roi> --overlay-format png --out output/<YYYY-MM-DD>
+.\.venv\Scripts\python.exe -B rock_gradation.py <photo> --roi <roi> --overlay-format png --out output/<YYYY-MM>/<YYYY-MM-DD>
 ```
 
 `--overlay-format png` is required on this machine: Kaspersky Endpoint Security blocks

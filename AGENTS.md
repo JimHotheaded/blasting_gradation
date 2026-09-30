@@ -8,8 +8,8 @@ Quick reference, from the repository root:
 
 ```powershell
 .\.venv\Scripts\python.exe -B -m unittest discover -s tests -v
-.\.venv\Scripts\python.exe -B rock_gradation.py <photo> --roi <x,y,w,h> --overlay-format png --out output/<YYYY-MM-DD>
+.\.venv\Scripts\python.exe -B rock_gradation.py <photo> --roi <x,y,w,h> --overlay-format png --out output/<YYYY-MM>/<YYYY-MM-DD>
 ```
 
-Site photos (`stockpile_picture/`), generated reports (`output/`), the
+Site photos (`stockpile_picture/<YYYY-MM>/`), generated reports (`output/<YYYY-MM>/<YYYY-MM-DD>/`), the
 virtualenv and model weights are deliberately untracked.
