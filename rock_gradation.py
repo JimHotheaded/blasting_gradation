@@ -28,7 +28,8 @@ More
   --pole-px 405,605,1045,645 --pole-length 2000   painted pole ends by hand
   --persp 0.8            foreground closer than pole: scale at bottom = 0.8x
   --roi x,y,w,h          analyse only this box (leave out bench face / sky);
-                         pixels or fractions, e.g. 0,0.2,1,0.8
+                         pixels or fractions, e.g. 0,0.2,1,0.8; repeat to
+                         analyse the union of several boxes
   --combine a.jpg b.jpg  explicit photos of one shot -> one gradation
 
 Accuracy is unvalidated; the earlier +/-25-30% estimate was not verified.
@@ -558,6 +559,9 @@ def report(frags, meta, args):
                        if k not in {"images"}},
              quantile_method="weighted empirical threshold; passing uses size < sieve",
              fragment_coordinate_space="downscaled working image")
+    boxes = getattr(args, "roi", None)
+    if boxes and len(boxes) == 1:           # one box keeps the flat x,y,w,h form
+        R["settings"]["roi"] = boxes[0]
     R["runtime"] = dict(python=sys.version.split()[0])
     for package in ("numpy", "scipy", "opencv-python", "ultralytics", "matplotlib"):
         try:
@@ -830,17 +834,16 @@ def validate_args(args, parser):
                      "--persp straight line; use one or the other")
     if args.persp_ref and len({row for row, _ in args.persp_ref}) != len(args.persp_ref):
         parser.error("--persp-ref rows must differ; each point needs its own distance")
-    for name in ("roi", "pole_px"):
-        coords = getattr(args, name)
+    for name, coords in [("roi", r) for r in args.roi or []] + [("pole_px", args.pole_px)]:
         if coords is not None and any(not math.isfinite(c) or c < 0 for c in coords):
             parser.error(f"--{name.replace('_', '-')} requires finite nonnegative coordinates")
     if args.pole_px is not None and args.pole_px[:2] == args.pole_px[2:]:
         parser.error("--pole-px endpoints must differ")
-    if args.roi is not None:
-        x, y, w, h = args.roi
+    for r in args.roi or []:
+        x, y, w, h = r
         if w <= 0 or h <= 0:
             parser.error("ROI width and height must be positive")
-        if all(c <= 1 for c in args.roi) and (x+w > 1 or y+h > 1):
+        if all(c <= 1 for c in r) and (x+w > 1 or y+h > 1):
             parser.error("Fractional ROI must remain within the image")
 
 
@@ -896,13 +899,13 @@ def analyse(path: Path, args):
 
     roi = np.zeros((H, W), np.uint8)
     if args.roi:
-        r_ = args.roi
-        if all(0 <= c <= 1 for c in r_):          # fractions of the photo
-            r_ = [r_[0] * W / k, r_[1] * H / k, r_[2] * W / k, r_[3] * H / k]
-        x, y, w, h = [int(round(c * k)) for c in r_]
-        if w <= 0 or h <= 0 or x < 0 or y < 0 or x+w > W or y+h > H:
-            raise SystemExit("ROI must be nonempty and inside the image at working resolution")
-        roi[max(0, y):min(H, y + h), max(0, x):min(W, x + w)] = 1
+        for r_ in args.roi:                       # several boxes -> their union
+            if all(0 <= c <= 1 for c in r_):      # fractions of the photo
+                r_ = [r_[0] * W / k, r_[1] * H / k, r_[2] * W / k, r_[3] * H / k]
+            x, y, w, h = [int(round(c * k)) for c in r_]
+            if w <= 0 or h <= 0 or x < 0 or y < 0 or x+w > W or y+h > H:
+                raise SystemExit("ROI must be nonempty and inside the image at working resolution")
+            roi[max(0, y):min(H, y + h), max(0, x):min(W, x + w)] = 1
     else:
         roi[:] = 1
     excl = (roi == 0).astype(np.uint8)
@@ -975,9 +978,10 @@ def main(argv=None):
                     help="pole ends x1,y1,x2,y2 in pixels - ends of the painted "
                          "segments, not the tip")
     ap.add_argument("--pole-length", type=float, default=2000, help="for --pole-px, mm")
-    ap.add_argument("--roi", type=box,
+    ap.add_argument("--roi", type=box, action="append",
                     help="analyse box x,y,w,h in pixels, or as fractions "
-                         "e.g. 0,0.2,1,0.8 = skip the top 20%% of the photo")
+                         "e.g. 0,0.2,1,0.8 = skip the top 20%% of the photo; "
+                         "repeat to analyse the union of several boxes")
     ap.add_argument("--breaker", type=float, default=400, help="oversize limit, mm (400)")
     ap.add_argument("--bypass", type=float, default=100,
                     help="fines cut-off: rock below this bypasses the crusher, mm (100). "

@@ -615,7 +615,9 @@ def build(lang, month, root, notes, raw, prepared):
     for d in days:
         R, m = d["R"], d["meta"]
         notes_html = "".join(f"<li>{esc(n)}</li>" for n in m["notes"])
-        roi = ", ".join(f"{v:g}" for v in R["settings"]["roi"]) if R["settings"]["roi"] else L["whole"]
+        boxes = R["settings"]["roi"] or []
+        boxes = boxes if boxes and isinstance(boxes[0], list) else [boxes] if boxes else []
+        roi = " + ".join(", ".join(f"{v:g}" for v in b) for b in boxes) or L["whole"]
         facts = L["facts"].format(b=pct(R["split"]["breaker"]), d50=R["d_values"]["D50"], n=R["fragments"],
                                   mmpp=R["mm_per_px"], scale=esc(scale_label(R)), roi=esc(roi))
         img = (f'<img src="data:image/webp;base64,{d["thumb"]}"\nalt="{esc(L["alt"].format(d=d["label"]))}" '

@@ -206,6 +206,7 @@ class CliAndExportTests(unittest.TestCase):
         cases = [["--scale", "0"], ["--scale", "nan"], ["--work-width", "0"],
                  ["--breaker", "100", "--bypass", "400"], ["--persp", "inf"],
                  ["--roi", "0,0,0,1"], ["--roi", "0.5,0,0.8,1"],
+                 ["--roi", "0,0,1,0.5", "--roi", "0.5,0.5,0.8,0.5"],
                  ["--pole-px", "1,1,1,1"], ["--conf", "2"],
                  ["--scale", "1", "--pole-px", "0,0,1,1"]]
         for flags in cases:
@@ -214,6 +215,12 @@ class CliAndExportTests(unittest.TestCase):
                     g.main(["missing.jpg"] + flags)
                 self.assertEqual(err.exception.code, 2)
                 analyse.assert_not_called()
+
+    def test_roi_export_keeps_single_box_flat_and_lists_several(self):
+        one, _ = report([100] * 10, roi=[[0, 0.2, 1, 0.8]])
+        two, _ = report([100] * 10, roi=[[0, 0.4, 0.9, 0.2], [0.6, 0.6, 0.4, 0.3]])
+        self.assertEqual(one["settings"]["roi"], [0, 0.2, 1, 0.8])
+        self.assertEqual(two["settings"]["roi"], [[0, 0.4, 0.9, 0.2], [0.6, 0.6, 0.4, 0.3]])
 
     def test_colliding_stems_fail_before_analysis(self):
         for paths in (["a/image.jpg", "b/image.png"], ["combined.jpg", "other.jpg"]):
