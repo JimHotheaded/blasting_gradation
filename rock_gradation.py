@@ -743,6 +743,12 @@ def _save_outputs(R, frags, a, stem, args):
             cv2.rectangle(vis, (20, y - 14), (40, y + 2), c, -1)
             cv2.putText(vis, t, (50, y), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 0), 1, cv2.LINE_AA)
             y += 28
+        # source photo name, top right, in the legend's style
+        (tw, th), _ = cv2.getTextSize(R["image"], cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+        W = vis.shape[1]
+        cv2.rectangle(vis, (W - tw - 30, 8), (W - 10, 22 + th), (255, 255, 255), -1)
+        cv2.putText(vis, R["image"], (W - tw - 20, 15 + th), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
+                    (0, 0, 0), 2, cv2.LINE_AA)
         ext = getattr(args, "overlay_format", OVERLAY_DEFAULT)
         params = [cv2.IMWRITE_JPEG_QUALITY, 90] if ext in ("jpg", "jpeg") else []
         ok, encoded = cv2.imencode(f".{ext}", vis, params)
