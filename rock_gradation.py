@@ -280,12 +280,15 @@ def run_fastsam(bgr, model_path, imgsz, conf, iou, max_det):
                retina_masks=True, verbose=False)[0]
     if r.masks is None:
         return []
-    data = r.masks.data.cpu().numpy() > 0.5
+    # Threshold one mask at a time. Converting the whole (N, H, W) float stack
+    # at once needs ~1 GB of extra memory for a few hundred full-size masks.
+    data = r.masks.data
     H, W = bgr.shape[:2]
     out = []
-    for m in data:
+    for i in range(data.shape[0]):
+        m = data[i].cpu().numpy() > 0.5
         if m.shape != (H, W):
-            m = cv2.resize(m.astype(np.uint8), (W, H), cv2.INTER_NEAREST) > 0
+            m = cv2.resize(m.astype(np.uint8), (W, H), interpolation=cv2.INTER_NEAREST) > 0
         ys, xs = np.nonzero(m)
         if len(xs) == 0:
             continue
